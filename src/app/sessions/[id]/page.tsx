@@ -5,7 +5,10 @@ import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getSession } from '@/lib/supabase/sessions';
-import { ArrowLeft, Calendar, CheckCircle, User, Users, Sparkles } from 'lucide-react';
+import { getActionPlansBySession, ActionPlanExtended } from '@/lib/supabase/action-plans';
+import { ArrowLeft, Calendar, CheckCircle, User, Users, Sparkles, Target, ExternalLink } from 'lucide-react';
+import { StatusBadge } from '@/components/action-plans/StatusBadge';
+import { PriorityIndicator } from '@/components/action-plans/PriorityIndicator';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -48,6 +51,7 @@ export default function SessionViewPage() {
 
   const [session, setSession] = useState<SessionData | null>(null);
   const [stages, setStages] = useState<StageResponse[]>([]);
+  const [actionPlans, setActionPlans] = useState<ActionPlanExtended[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedStage, setSelectedStage] = useState<number>(1);
 
@@ -64,6 +68,14 @@ export default function SessionViewPage() {
       // Select the first available stage
       if (data.stages.length > 0) {
         setSelectedStage(data.stages[0].stage_number);
+      }
+
+      // Load action plans for this session
+      try {
+        const plans = await getActionPlansBySession(sessionId);
+        setActionPlans(plans);
+      } catch (error) {
+        console.error('Failed to load action plans:', error);
       }
     } catch (error) {
       console.error('Failed to load session:', error);
@@ -207,6 +219,67 @@ export default function SessionViewPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Action Plans Section */}
+        {actionPlans.length > 0 && (
+          <Card className="mb-6 border-2 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-green-600" />
+                <span>Action Plans from this Session</span>
+                <Badge className="ml-2 bg-green-600 hover:bg-green-600 text-white">
+                  {actionPlans.length}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-3">
+                {actionPlans.map((plan) => (
+                  <div
+                    key={plan.id}
+                    className="flex items-start justify-between p-4 bg-white border-2 border-slate-200 rounded-lg hover:border-indigo-300 transition-all"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="font-semibold text-slate-900">{plan.title}</h4>
+                        <StatusBadge status={plan.status} />
+                        <PriorityIndicator priority={plan.priority} showLabel={false} />
+                      </div>
+                      {plan.description && (
+                        <p className="text-sm text-slate-600 mb-2 line-clamp-2">
+                          {plan.description}
+                        </p>
+                      )}
+                      {plan.due_date && (
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <Calendar className="h-3 w-3" />
+                          <span>Due: {format(new Date(plan.due_date), 'MMM d, yyyy')}</span>
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/action-plans/${plan.id}`)}
+                      className="ml-4 flex-shrink-0"
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      View Details
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/action-plans')}
+                  className="w-full mt-2 border-2 border-green-200 hover:bg-green-50 text-green-700"
+                >
+                  <Target className="mr-2 h-4 w-4" />
+                  View All Action Plans
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stage Conversation */}
         {currentStageData ? (

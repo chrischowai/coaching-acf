@@ -34,6 +34,8 @@ const supabase = createClient();
  * Create a new coaching session
  */
 export async function createSession(sessionType: 'coach_led' | 'self_coaching') {
+  console.log('Creating new coaching session...');
+  
   const { data, error } = await supabase
     .from('coaching_sessions')
     .insert({
@@ -47,9 +49,29 @@ export async function createSession(sessionType: 'coach_led' | 'self_coaching') 
 
   if (error) {
     console.error('Error creating session:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     throw error;
   }
 
+  if (!data) {
+    throw new Error('Session created but no data returned');
+  }
+
+  console.log('Session created successfully:', data.id);
+  
+  // Verify the session was actually saved by reading it back
+  const { data: verifyData, error: verifyError } = await supabase
+    .from('coaching_sessions')
+    .select('*')
+    .eq('id', data.id)
+    .single();
+
+  if (verifyError || !verifyData) {
+    console.error('Session verification failed:', verifyError);
+    throw new Error('Session created but could not be verified');
+  }
+
+  console.log('Session verified:', verifyData.id);
   return data;
 }
 
@@ -88,6 +110,25 @@ export async function saveStageResponse(stageData: StageResponse) {
     stage_name: stageData.stage_name,
     has_responses: !!stageData.responses,
   });
+
+  // First verify the session exists
+  const { data: sessionCheck, error: sessionError } = await supabase
+    .from('coaching_sessions')
+    .select('id')
+    .eq('id', stageData.session_id)
+    .maybeSingle();
+
+  if (sessionError) {
+    console.error('Error checking session existence:', sessionError);
+    throw new Error(`Failed to verify session exists: ${sessionError.message}`);
+  }
+
+  if (!sessionCheck) {
+    console.error('Session not found in database:', stageData.session_id);
+    throw new Error('Session not found. Please refresh and start a new session.');
+  }
+
+  console.log('Session verified, proceeding with stage response save');
 
   const { data, error } = await supabase
     .from('stage_responses')
@@ -139,15 +180,36 @@ export async function getSessions() {
  * Get a single session with all stage responses
  */
 export async function getSession(sessionId: string) {
+  console.log('getSession called with sessionId:', sessionId);
+  
+  if (!sessionId || sessionId.trim() === '') {
+    throw new Error('Invalid sessionId: ID cannot be empty');
+  }
+  
   const { data: session, error: sessionError } = await supabase
     .from('coaching_sessions')
     .select('*')
     .eq('id', sessionId)
     .single();
 
+  console.log('getSession result:', { 
+    hasSession: !!session, 
+    hasError: !!sessionError,
+    errorMessage: sessionError?.message,
+    errorCode: sessionError?.code,
+    errorDetails: sessionError?.details 
+  });
+
   if (sessionError) {
-    console.error('Error fetching session:', sessionError);
-    throw sessionError;
+    const errorMsg = `Failed to fetch session ${sessionId}: ${sessionError.message || sessionError.code || 'Unknown error'}`;
+    console.error(errorMsg, sessionError);
+    throw new Error(errorMsg);
+  }
+  
+  if (!session) {
+    const errorMsg = `Session not found: ${sessionId}`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
   }
 
   const { data: stages, error: stagesError } = await supabase

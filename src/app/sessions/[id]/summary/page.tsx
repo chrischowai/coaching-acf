@@ -279,9 +279,26 @@ export default function SessionSummaryPage() {
                     <CardDescription>Overview of the coaching session</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-6">
-                    <p className="text-slate-700 leading-relaxed text-base">
-                      {parseSummary(summary).executiveSummary}
-                    </p>
+                    <div className="text-slate-700 leading-relaxed text-base space-y-3">
+                      {parseSummary(summary).executiveSummary.split(/\. (?=[A-Z])/).map((sentence, idx) => {
+                        const trimmed = sentence.trim();
+                        if (!trimmed) return null;
+                        const withPeriod = trimmed.endsWith('.') ? trimmed : trimmed + '.';
+                        // Highlight quoted text
+                        const parts = withPeriod.split(/"([^"]+)"/);
+                        return (
+                          <p key={idx} className="text-slate-700">
+                            {parts.map((part, i) => 
+                              i % 2 === 1 ? (
+                                <span key={i} className="font-semibold text-blue-700">"{part}"</span>
+                              ) : (
+                                part
+                              )
+                            )}
+                          </p>
+                        );
+                      })}
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -299,16 +316,39 @@ export default function SessionSummaryPage() {
                     <CardDescription>Discoveries from the 5 coaching stages</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-6">
-                    <div 
-                      className="text-slate-700 leading-relaxed prose prose-slate max-w-none"
-                      dangerouslySetInnerHTML={{ 
-                        __html: parseSummary(summary).keyInsights
-                          .replace(/•/g, '<li class="ml-4">')
-                          .replace(/\n\n/g, '</li>')
-                          .replace(/^/, '<ul class="space-y-2">')
-                          .replace(/$/, '</ul>')
-                      }}
-                    />
+                    <div className="space-y-4">
+                      {parseSummary(summary).keyInsights.split(/\*\*([^*]+)\*\*/g).map((part, i) => {
+                        if (i % 2 === 1) {
+                          // This is a heading
+                          return (
+                            <div key={i} className="mb-2">
+                              <h4 className="font-bold text-purple-800 text-sm mb-2">{part}</h4>
+                            </div>
+                          );
+                        } else if (part.trim()) {
+                          // This is content with bullet points
+                          const lines = part.trim()
+                            .split('\n')
+                            .filter(line => line.trim())
+                            .map(line => line.replace(/^[*•]\s*/, '').trim())
+                            .filter(Boolean);
+                          
+                          if (lines.length === 0) return null;
+                          
+                          return (
+                            <ul key={i} className="space-y-2">
+                              {lines.map((line, idx) => (
+                                <li key={idx} className="flex items-start gap-2 text-slate-700 text-sm">
+                                  <span className="text-purple-600 font-bold mt-0.5 flex-shrink-0">•</span>
+                                  <span className="flex-1">{line}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -351,13 +391,34 @@ export default function SessionSummaryPage() {
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div 
-                      className="text-slate-700 leading-relaxed prose prose-slate max-w-none"
+                      className="space-y-4"
                       dangerouslySetInnerHTML={{ 
                         __html: parseSummary(summary).actions
-                          .replace(/\n\n/g, '</p><p class="mt-4">')
-                          .replace(/\d+\./g, '<span class="inline-flex items-center justify-center w-6 h-6 bg-amber-100 text-amber-700 rounded-full text-sm font-semibold mr-2">$&</span>')
-                          .replace(/^/, '<p>')
-                          .replace(/$/, '</p>')
+                          .split(/(?=\d+\.)/)
+                          .filter(item => item.trim())
+                          .map((item) => {
+                            const match = item.match(/(\d+)\.\s*\*\*([^*]+)\*\*(.+)/s);
+                            if (match) {
+                              const [, num, title, details] = match;
+                              const deadline = details.match(/\(Deadline:([^)]+)\)/)?.[1]?.trim() || '';
+                              const cleanDetails = details.replace(/\(Deadline:[^)]+\)/g, '').trim();
+                              return `
+                                <div class="flex items-start gap-4 p-4 bg-amber-50/50 rounded-lg border border-amber-200">
+                                  <div class="flex-shrink-0">
+                                    <span class="inline-flex items-center justify-center w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-full text-base font-bold shadow-sm">${num}</span>
+                                  </div>
+                                  <div class="flex-1 space-y-2">
+                                    <h4 class="font-bold text-slate-900 text-base">${title}</h4>
+                                    <p class="text-slate-700 text-sm leading-relaxed">${cleanDetails}</p>
+                                    ${deadline ? `<div class="flex items-center gap-2 text-amber-700 text-sm font-medium"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg><span>Deadline: ${deadline}</span></div>` : ''}
+                                  </div>
+                                </div>
+                              `;
+                            }
+                            return '';
+                          })
+                          .filter(Boolean)
+                          .join('')
                       }}
                     />
                   </CardContent>
@@ -379,13 +440,20 @@ export default function SessionSummaryPage() {
                     </CardHeader>
                     <CardContent className="pt-6">
                       <div 
-                        className="text-sm text-slate-700 leading-relaxed"
+                        className="space-y-2"
                         dangerouslySetInnerHTML={{ 
                           __html: parseSummary(summary).metrics
-                            .replace(/•/g, '<li class="ml-4">')
-                            .replace(/\n\n/g, '</li>')
-                            .replace(/^/, '<ul class="space-y-2">')
-                            .replace(/$/, '</ul>')
+                            .split('\n')
+                            .filter(line => line.trim())
+                            .map(line => {
+                              const cleaned = line.replace(/^[*•]\s*/, '').trim();
+                              if (cleaned) {
+                                return `<div class="flex items-start gap-2 p-2 rounded hover:bg-cyan-50 transition-colors"><span class="text-cyan-600 font-bold text-lg mt-0.5">✓</span><span class="text-slate-700 text-sm flex-1">${cleaned}</span></div>`;
+                              }
+                              return '';
+                            })
+                            .filter(Boolean)
+                            .join('')
                         }}
                       />
                     </CardContent>
@@ -406,13 +474,20 @@ export default function SessionSummaryPage() {
                     </CardHeader>
                     <CardContent className="pt-6">
                       <div 
-                        className="text-sm text-slate-700 leading-relaxed"
+                        className="space-y-2"
                         dangerouslySetInnerHTML={{ 
                           __html: parseSummary(summary).support
-                            .replace(/•/g, '<li class="ml-4">')
-                            .replace(/\n\n/g, '</li>')
-                            .replace(/^/, '<ul class="space-y-2">')
-                            .replace(/$/, '</ul>')
+                            .split('\n')
+                            .filter(line => line.trim())
+                            .map(line => {
+                              const cleaned = line.replace(/^[*•]\s*/, '').trim();
+                              if (cleaned) {
+                                return `<div class="flex items-start gap-2 p-2 rounded hover:bg-rose-50 transition-colors"><span class="text-rose-600 text-lg mt-0.5">👥</span><span class="text-slate-700 text-sm flex-1">${cleaned}</span></div>`;
+                              }
+                              return '';
+                            })
+                            .filter(Boolean)
+                            .join('')
                         }}
                       />
                     </CardContent>

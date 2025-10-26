@@ -17,6 +17,36 @@ export interface ActionPlanExtended {
   updated_at: string;
 }
 
+// Helper to convert integer priority from DB to string for TypeScript
+function normalizePriority(priority: any): 'low' | 'medium' | 'high' {
+  if (typeof priority === 'string') {
+    return priority as 'low' | 'medium' | 'high';
+  }
+  // Database stores as integer (1-5)
+  const numPriority = Number(priority);
+  if (numPriority >= 4) return 'high';
+  if (numPriority >= 2) return 'medium';
+  return 'low';
+}
+
+// Helper to convert string priority to integer for DB
+function priorityToInt(priority: 'low' | 'medium' | 'high'): number {
+  switch (priority) {
+    case 'high': return 5;
+    case 'medium': return 3;
+    case 'low': return 1;
+    default: return 3;
+  }
+}
+
+// Normalize action plan data from database
+function normalizeActionPlan(data: any): ActionPlanExtended {
+  return {
+    ...data,
+    priority: normalizePriority(data.priority),
+  };
+}
+
 const supabase = createClient();
 
 /**
@@ -40,7 +70,7 @@ export async function getAllActionPlans(status?: string) {
     throw error;
   }
 
-  return data as ActionPlanExtended[];
+  return data ? data.map(normalizeActionPlan) : [];
 }
 
 /**
@@ -58,7 +88,7 @@ export async function getActionPlansBySession(sessionId: string) {
     throw error;
   }
 
-  return data as ActionPlanExtended[];
+  return data ? data.map(normalizeActionPlan) : [];
 }
 
 /**
@@ -68,10 +98,16 @@ export async function updateActionPlan(
   id: string,
   updates: Partial<ActionPlanExtended>
 ) {
+  // Convert priority to integer if present
+  const dbUpdates: any = { ...updates };
+  if (updates.priority) {
+    dbUpdates.priority = priorityToInt(updates.priority);
+  }
+  
   const { data, error } = await supabase
     .from('action_plans')
     .update({
-      ...updates,
+      ...dbUpdates,
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
@@ -83,7 +119,7 @@ export async function updateActionPlan(
     throw error;
   }
 
-  return data as ActionPlanExtended;
+  return data ? normalizeActionPlan(data) : data;
 }
 
 /**
@@ -143,7 +179,7 @@ export async function getActionsPlansDueSoon(days: number = 7) {
     throw error;
   }
 
-  return data as ActionPlanExtended[];
+  return data ? data.map(normalizeActionPlan) : [];
 }
 
 /**
@@ -162,7 +198,7 @@ export async function getOverdueActionPlans() {
     throw error;
   }
 
-  return data as ActionPlanExtended[];
+  return data ? data.map(normalizeActionPlan) : [];
 }
 
 /**

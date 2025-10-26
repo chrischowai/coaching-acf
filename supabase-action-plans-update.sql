@@ -2,6 +2,7 @@
 -- Run this in Supabase SQL Editor
 
 -- Add tracking columns to action_plans
+ALTER TABLE action_plans ADD COLUMN IF NOT EXISTS due_date DATE;
 ALTER TABLE action_plans ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 ALTER TABLE action_plans ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE action_plans ADD COLUMN IF NOT EXISTS reminder_frequency TEXT DEFAULT 'daily' CHECK (reminder_frequency IN ('none', 'daily', 'weekly', 'custom'));

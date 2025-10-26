@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, ArrowRight, Send, Loader2, Users, User, CheckCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Send, Loader2, Users, User, CheckCircle, Sparkles, Target, ListChecks, TrendingUp, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { createSession, updateSession, saveStageResponse } from '@/lib/supabase/sessions';
+import { createSession, updateSession, saveStageResponse, getSession } from '@/lib/supabase/sessions';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -54,9 +55,11 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
     const initSession = async () => {
       try {
         const session = await createSession(sessionType);
-        setSessionId(session.id);
         console.log('Session created:', session.id);
+        setSessionId(session.id);
         toast.success('Session started');
+        // Small delay to ensure DB transaction commits
+        await new Promise(resolve => setTimeout(resolve, 500));
         startStage(1);
       } catch (error) {
         console.error('Failed to create session:', error);
@@ -76,7 +79,18 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
   // Auto-save messages to database
   useEffect(() => {
     const autoSave = async () => {
-      if (!sessionId || messages.length === 0 || isSaving) return;
+      // Validate session exists and we have messages to save
+      if (!sessionId || messages.length === 0 || isSaving) {
+        console.log('Skipping auto-save:', { sessionId, messageCount: messages.length, isSaving });
+        return;
+      }
+
+      // Only auto-save if we have at least one AI response (not just the initial question)
+      const hasAIResponse = messages.some(m => m.role === 'assistant');
+      if (!hasAIResponse) {
+        console.log('Skipping auto-save: no AI responses yet');
+        return;
+      }
 
       try {
         await saveStageResponse({
@@ -88,11 +102,12 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
         console.log('Auto-saved stage', currentStage);
       } catch (error) {
         console.error('Auto-save failed:', error);
+        // Don't show error toast for auto-save failures to avoid annoying user
       }
     };
 
-    // Debounce auto-save (wait 2 seconds after last message)
-    const timer = setTimeout(autoSave, 2000);
+    // Debounce auto-save (wait 3 seconds after last message to ensure DB is ready)
+    const timer = setTimeout(autoSave, 3000);
     return () => clearTimeout(timer);
   }, [messages, sessionId, currentStage, isSaving]);
 
@@ -185,7 +200,12 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
     
     if (!sessionId) {
       console.error('No sessionId, cannot proceed');
-      toast.error('Session not initialized');
+      toast.error('Session not initialized. Please refresh and try again.');
+      return;
+    }
+
+    if (questionCount < 8) {
+      toast.error(`Please answer at least 8 questions before proceeding (current: ${questionCount})`);
       return;
     }
 
@@ -201,6 +221,20 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
 
     console.log('Saving stage data and moving to next stage...');
     try {
+      // Verify session exists in database before saving
+      try {
+        const { session } = await getSession(sessionId);
+        if (!session) {
+          throw new Error('Session not found in database');
+        }
+        console.log('Verified session exists:', session.id);
+      } catch (verifyError) {
+        console.error('Session verification failed:', verifyError);
+        toast.error('Session not found. Please refresh and start a new session.');
+        setIsSaving(false);
+        return;
+      }
+
       // Save stage as completed
       await saveStageResponse({
         session_id: sessionId,
@@ -246,6 +280,7 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
   const generateSummary = async (allData: StageData[]) => {
     setIsLoading(true);
     try {
+      // Generate summary
       const response = await fetch('/api/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -259,8 +294,34 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
 
       const data = await response.json();
       setSummary(data.summary);
+      
+      // Extract and save action plans (with better error handling)
+      try {
+        const actionsResponse = await fetch('/api/extract-actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            summary: data.summary,
+          }),
+        });
+
+        if (actionsResponse.ok) {
+          const actionsData = await actionsResponse.json();
+          console.log(`Created ${actionsData.count} action plans`);
+          toast.success(`Session completed! ${actionsData.count} action plans created.`);
+        } else {
+          const errorData = await actionsResponse.json();
+          console.warn('Failed to extract action plans:', errorData);
+          toast.success('Session completed! Review your summary below.');
+        }
+      } catch (actionError) {
+        console.warn('Action extraction failed (non-critical):', actionError);
+        // Don't show error to user, just log it
+        toast.success('Session completed! Review your summary below.');
+      }
+      
       setShowSummary(true);
-      toast.success('Session completed! Review your summary below.');
     } catch (error) {
       toast.error('Failed to generate summary');
       console.error(error);
@@ -270,21 +331,43 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
   };
 
   if (showSummary) {
-    // Parse summary for key sections
+    // Parse summary for key sections (matching Session Summary page)
     const parseSummary = (text: string) => {
       const sections: any = {};
       
-      // Extract key sections using markers
-      const goalMatch = text.match(/\*\*Goal Statement\*\*[:\s]*([^*]+)/i);
-      const actionsMatch = text.match(/\*\*Action Plan\*\*[:\s]*([^*]+)/i);
-      const metricsMatch = text.match(/\*\*Success Metrics\*\*[:\s]*([^*]+)/i);
+      // More flexible regex patterns to capture content
+      const executiveSummaryMatch = text.match(/\*\*Executive Summary\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+      const keyInsightsMatch = text.match(/\*\*Key Insights\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+      const goalMatch = text.match(/\*\*Goal Statement\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+      const actionsMatch = text.match(/\*\*Action Plan\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+      const metricsMatch = text.match(/\*\*Success Metrics\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+      const supportMatch = text.match(/\*\*Support & Accountability\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
       
+      sections.executiveSummary = executiveSummaryMatch ? executiveSummaryMatch[1].trim() : '';
+      sections.keyInsights = keyInsightsMatch ? keyInsightsMatch[1].trim() : '';
       sections.goal = goalMatch ? goalMatch[1].trim() : '';
       sections.actions = actionsMatch ? actionsMatch[1].trim() : '';
       sections.metrics = metricsMatch ? metricsMatch[1].trim() : '';
+      sections.support = supportMatch ? supportMatch[1].trim() : '';
       sections.fullText = text;
       
       return sections;
+    };
+    
+    const extractKeyHeading = (text: string): string => {
+      // Try to extract the main focus from executive summary or goal
+      const goalMatch = text.match(/to become.*?(?=\.|,|within)/i);
+      if (goalMatch) {
+        return goalMatch[0].replace(/^to become\s*/i, '').trim();
+      }
+      
+      // Fallback: extract first meaningful sentence
+      const sentenceMatch = text.match(/(?:session|coaching)\s+focused on\s+([^.]+)/i);
+      if (sentenceMatch) {
+        return sentenceMatch[1].trim();
+      }
+      
+      return 'Professional Development Journey';
     };
     
     const handleExitWithConfirmation = () => {
@@ -299,155 +382,305 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
     const summaryData = parseSummary(summary);
     
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
         {/* Header */}
-        <div className="border-b border-indigo-200 bg-white/80 backdrop-blur-sm shadow-sm">
-          <div className="max-w-[1400px] mx-auto px-6 py-4">
+        <div className="bg-white border-b border-slate-200 shadow-sm no-print">
+          <div className="max-w-[1000px] mx-auto px-6 py-6">
             <div className="flex items-center justify-between">
               <Button 
                 variant="ghost" 
                 onClick={handleExitWithConfirmation}
-                className="hover:bg-indigo-50"
+                className="gap-2"
               >
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="h-4 w-4" />
                 Back to Home
               </Button>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-lg">
-                  <Sparkles className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">Session Complete</p>
-                  <p className="text-xs text-slate-500">Your Coaching Summary</p>
-                </div>
+              <div className="text-right">
+                <h1 className="text-2xl font-bold text-slate-900">Session Complete</h1>
+                <p className="text-sm text-slate-500">
+                  {sessionType === 'coach_led' ? 'Coach-Led Session' : 'Self-Coaching Session'}
+                </p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="max-w-[1400px] mx-auto px-6 py-8">
-          {/* Hero Section */}
-          <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl p-8 mb-8 shadow-2xl">
-            <div className="flex items-center gap-4 mb-4">
-              <CheckCircle className="h-12 w-12 text-white" />
-              <div>
-                <h1 className="text-3xl font-bold text-white">Coaching Session Complete!</h1>
-                <p className="text-indigo-100 mt-1">Congratulations on completing all 5 ACF stages</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-5 gap-3 mt-6">
-              {STAGE_NAMES.map((name, idx) => (
-                <div key={idx} className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
-                  <CheckCircle className="h-5 w-5 text-white mx-auto mb-1" />
-                  <p className="text-xs text-white font-semibold">{name.split(' ')[0]}</p>
-                </div>
-              ))}
-            </div>
+        <div className="max-w-[1000px] mx-auto px-6 py-8">
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-3 mb-6 no-print">
+            <Button
+              onClick={() => window.print()}
+              size="lg"
+              variant="outline"
+              className="gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+            <Button
+              onClick={handleExitWithConfirmation}
+              size="lg"
+              className="gap-2 shadow-lg"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Complete & Exit
+            </Button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Key Highlights */}
-            <div className="space-y-6">
-              {/* Goal Card */}
-              {summaryData.goal && (
-                <Card className="border-2 border-green-200 shadow-xl">
-                  <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <div className="p-2 bg-green-600 rounded-lg">
-                        <CheckCircle className="h-5 w-5 text-white" />
-                      </div>
-                      Your Goal
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <p className="text-base leading-relaxed text-slate-700 font-medium">
-                      {summaryData.goal}
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
+          {/* PDF Content Area */}
+          <div className="bg-white print:p-8">
+            {/* Professional Header */}
+            <Card className="border-none shadow-none mb-6">
+              <CardHeader className="space-y-4 pb-6">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-sm font-medium">
+                      <CheckCircle className="h-3 w-3 mr-1.5" />
+                      Completed {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </Badge>
+                    <Badge className="bg-indigo-600">
+                      {sessionType === 'coach_led' ? 'Coach-Led' : 'Self-Coaching'}
+                    </Badge>
+                  </div>
+                  <h1 className="text-4xl font-bold text-slate-900 tracking-tight">
+                    Coaching Session Summary
+                  </h1>
+                  <p className="text-xl text-indigo-600 font-semibold">
+                    {extractKeyHeading(summaryData.executiveSummary || summaryData.goal || summary)}
+                  </p>
+                </div>
+              </CardHeader>
+            </Card>
 
-              {/* Success Metrics Card */}
-              {summaryData.metrics && (
-                <Card className="border-2 border-blue-200 shadow-xl">
-                  <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <div className="p-2 bg-blue-600 rounded-lg">
-                        <Sparkles className="h-5 w-5 text-white" />
-                      </div>
-                      Success Metrics
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <p className="text-sm leading-relaxed text-slate-700">
-                      {summaryData.metrics}
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
+          {/* Executive Summary */}
+          {summaryData.executiveSummary && (
+            <Card className="mb-6 border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                <CardTitle className="text-lg font-semibold text-slate-900">Executive Summary</CardTitle>
+                <CardDescription>Overview of the coaching session</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="text-slate-700 leading-relaxed text-base space-y-3">
+                  {summaryData.executiveSummary.split(/\. (?=[A-Z])/).map((sentence, idx) => {
+                    const trimmed = sentence.trim();
+                    if (!trimmed) return null;
+                    const withPeriod = trimmed.endsWith('.') ? trimmed : trimmed + '.';
+                    // Highlight quoted text
+                    const parts = withPeriod.split(/"([^"]+)"/);
+                    return (
+                      <p key={idx} className="text-slate-700">
+                        {parts.map((part, i) => 
+                          i % 2 === 1 ? (
+                            <span key={i} className="font-semibold text-blue-700">"{part}"</span>
+                          ) : (
+                            part
+                          )
+                        )}
+                      </p>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-              {/* Action Buttons */}
-              <div className="space-y-3">
-                <Button 
-                  onClick={() => window.print()} 
-                  variant="outline" 
-                  className="w-full py-6 text-base font-semibold border-2"
-                  size="lg"
-                >
-                  <span className="mr-2">📄</span> Print Summary
-                </Button>
-                <Button 
-                  onClick={handleExitWithConfirmation} 
-                  className="w-full py-6 text-base font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                  size="lg"
-                >
-                  <CheckCircle className="mr-2 h-5 w-5" />
-                  Complete Session
-                </Button>
-              </div>
-            </div>
+          {/* Key Insights */}
+          {summaryData.keyInsights && (
+            <Card className="mb-6 border-l-4 border-l-purple-500 shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
+                <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                  <div className="p-1.5 bg-purple-100 rounded-lg">
+                    <Target className="h-4 w-4 text-purple-600" />
+                  </div>
+                  Key Insights
+                </CardTitle>
+                <CardDescription>Discoveries from the 5 coaching stages</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {summaryData.keyInsights.split(/\*\*([^*]+)\*\*/g).map((part, i) => {
+                    if (i % 2 === 1) {
+                      // This is a heading
+                      return (
+                        <div key={i} className="mb-2">
+                          <h4 className="font-bold text-purple-800 text-sm mb-2">{part}</h4>
+                        </div>
+                      );
+                    } else if (part.trim()) {
+                      // This is content with bullet points
+                      const lines = part.trim()
+                        .split('\n')
+                        .filter(line => line.trim())
+                        .map(line => line.replace(/^[*•]\s*/, '').trim())
+                        .filter(Boolean);
+                      
+                      if (lines.length === 0) return null;
+                      
+                      return (
+                        <ul key={i} className="space-y-2">
+                          {lines.map((line, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-slate-700 text-sm">
+                              <span className="text-purple-600 font-bold mt-0.5 flex-shrink-0">•</span>
+                              <span className="flex-1">{line}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-            {/* Right Column - Action Plan & Full Summary */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Action Plan Highlight */}
-              {summaryData.actions && (
-                <Card className="border-2 border-amber-200 shadow-xl">
-                  <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200">
-                    <CardTitle className="text-xl flex items-center gap-2">
-                      <div className="p-2 bg-amber-600 rounded-lg">
-                        <ArrowRight className="h-6 w-6 text-white" />
-                      </div>
-                      Action Plan & Timeline
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-6">
-                    <div className="prose prose-slate max-w-none">
-                      <div className="text-base leading-relaxed whitespace-pre-wrap">
-                        {summaryData.actions}
-                      </div>
+          {/* Goal Statement */}
+          {summaryData.goal && (
+            <Card className="mb-6 border-2 border-emerald-200 shadow-lg hover:shadow-xl transition-shadow bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+              <CardHeader className="border-b border-emerald-100">
+                <CardTitle className="text-xl font-bold text-slate-900 flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl shadow-md">
+                    <Target className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <div>Goal Statement</div>
+                    <p className="text-sm font-normal text-emerald-600 mt-0.5">SMART Goal</p>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="bg-white rounded-lg p-4 border border-emerald-100">
+                  <p className="text-base font-medium text-slate-800 leading-relaxed">
+                    {summaryData.goal}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Action Plan */}
+          {summaryData.actions && (
+            <Card className="mb-6 border-l-4 border-l-amber-500 shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50">
+                <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                  <div className="p-1.5 bg-amber-100 rounded-lg">
+                    <ListChecks className="h-4 w-4 text-amber-600" />
+                  </div>
+                  Action Plan & Timeline
+                </CardTitle>
+                <CardDescription>Specific actions with timelines</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div 
+                  className="space-y-4"
+                  dangerouslySetInnerHTML={{ 
+                    __html: summaryData.actions
+                      .split(/(?=\d+\.)/)
+                      .filter(item => item.trim())
+                      .map((item) => {
+                        const match = item.match(/(\d+)\.\s*\*\*([^*]+)\*\*(.+)/s);
+                        if (match) {
+                          const [, num, title, details] = match;
+                          const deadline = details.match(/\(Deadline:([^)]+)\)/)?.[1]?.trim() || '';
+                          const cleanDetails = details.replace(/\(Deadline:[^)]+\)/g, '').trim();
+                          return `
+                            <div class="flex items-start gap-4 p-4 bg-amber-50/50 rounded-lg border border-amber-200">
+                              <div class="flex-shrink-0">
+                                <span class="inline-flex items-center justify-center w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-full text-base font-bold shadow-sm">${num}</span>
+                              </div>
+                              <div class="flex-1 space-y-2">
+                                <h4 class="font-bold text-slate-900 text-base">${title}</h4>
+                                <p class="text-slate-700 text-sm leading-relaxed">${cleanDetails}</p>
+                                ${deadline ? `<div class="flex items-center gap-2 text-amber-700 text-sm font-medium"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg><span>Deadline: ${deadline}</span></div>` : ''}
+                              </div>
+                            </div>
+                          `;
+                        }
+                        return '';
+                      })
+                      .filter(Boolean)
+                      .join('')
+                  }}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            {/* Success Metrics */}
+            {summaryData.metrics && (
+              <Card className="border-l-4 border-l-cyan-500 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50">
+                  <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                    <div className="p-1.5 bg-cyan-100 rounded-lg">
+                      <TrendingUp className="h-4 w-4 text-cyan-600" />
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Full Summary */}
-              <Card className="border-2 border-slate-200 shadow-xl">
-                <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                  <CardTitle className="text-xl">Complete Session Summary</CardTitle>
+                    Success Metrics
+                  </CardTitle>
+                  <CardDescription>How progress will be measured</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <div className="prose prose-slate max-w-none">
-                    <div 
-                      className="text-sm leading-relaxed" 
-                      dangerouslySetInnerHTML={{ 
-                        __html: summaryData.fullText
-                          .replace(/\*\*(.+?)\*\*/g, '<strong class="text-slate-900 text-base">$1</strong>')
-                          .replace(/\n/g, '<br/>') 
-                      }} 
-                    />
-                  </div>
+                  <div 
+                    className="space-y-2"
+                    dangerouslySetInnerHTML={{ 
+                      __html: summaryData.metrics
+                        .split('\n')
+                        .filter(line => line.trim())
+                        .map(line => {
+                          const cleaned = line.replace(/^[*•]\s*/, '').trim();
+                          if (cleaned) {
+                            return `<div class="flex items-start gap-2 p-2 rounded hover:bg-cyan-50 transition-colors"><span class="text-cyan-600 font-bold text-lg mt-0.5">✓</span><span class="text-slate-700 text-sm flex-1">${cleaned}</span></div>`;
+                          }
+                          return '';
+                        })
+                        .filter(Boolean)
+                        .join('')
+                    }}
+                  />
                 </CardContent>
               </Card>
+            )}
+
+            {/* Support & Accountability */}
+            {summaryData.support && (
+              <Card className="border-l-4 border-l-rose-500 shadow-sm hover:shadow-md transition-shadow">
+                <CardHeader className="bg-gradient-to-r from-rose-50 to-pink-50">
+                  <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                    <div className="p-1.5 bg-rose-100 rounded-lg">
+                      <Users className="h-4 w-4 text-rose-600" />
+                    </div>
+                    Support & Accountability
+                  </CardTitle>
+                  <CardDescription>Your support system</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div 
+                    className="space-y-2"
+                    dangerouslySetInnerHTML={{ 
+                      __html: summaryData.support
+                        .split('\n')
+                        .filter(line => line.trim())
+                        .map(line => {
+                          const cleaned = line.replace(/^[*•]\s*/, '').trim();
+                          if (cleaned) {
+                            return `<div class="flex items-start gap-2 p-2 rounded hover:bg-rose-50 transition-colors"><span class="text-rose-600 text-lg mt-0.5">👥</span><span class="text-slate-700 text-sm flex-1">${cleaned}</span></div>`;
+                          }
+                          return '';
+                        })
+                        .filter(Boolean)
+                        .join('')
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+            {/* Footer */}
+            <div className="mt-8 pt-6 border-t border-slate-200">
+              <p className="text-sm text-slate-500 text-center">
+                Generated on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} • ACF Coaching Framework
+              </p>
             </div>
           </div>
         </div>
@@ -552,7 +785,7 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
                         <div className="font-bold">{stageName}</div>
                         <div className="text-slate-300 mt-1">
                           {isCompleted && 'Completed ✓'}
-                          {isActive && `In Progress (${questionCount}/15 questions)`}
+                          {isActive && 'In Progress'}
                           {isUpcoming && 'Upcoming'}
                         </div>
                       </div>
@@ -570,23 +803,14 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
               })}
             </div>
             
-            {/* Progress Bar */}
-            <div className="flex items-center gap-4">
-              <Progress value={progress} className="flex-1 h-3 bg-slate-200 shadow-inner" />
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border-2 border-indigo-200 shadow-sm">
-                  <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></div>
-                  <p className="text-xs font-bold text-slate-700">
-                    {questionCount}/15 <span className="text-slate-500 font-normal">questions</span>
-                  </p>
-                </div>
-                {questionCount >= 5 && (
-                  <span className="text-xs font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-full border-2 border-green-200 shadow-sm animate-pulse">
-                    ✓ Ready to Proceed
-                  </span>
-                )}
+            {/* Ready to Proceed Indicator */}
+            {questionCount >= 8 && (
+              <div className="flex justify-center">
+                <span className="text-xs font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-full border-2 border-green-200 shadow-sm animate-pulse">
+                  ✓ Ready to Proceed to Next Stage
+                </span>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -699,7 +923,7 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
               </Button>
             </div>
           </div>
-          {questionCount >= 5 && (
+          {questionCount >= 8 && (
             <div className="mt-4">
               <Button
                 onClick={handleNextStage}

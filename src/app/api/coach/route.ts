@@ -6,40 +6,35 @@ const STAGE_CONTEXTS = {
     goal: 'Understand the current context, challenges, and what has been tried',
     openingQuestion: 'What would you like to focus on in this coaching session today?',
     followUpAreas: ['current situation', 'challenges faced', 'what has been tried', 'emotions and feelings', 'desired outcome'],
-    minQuestions: 5,
-    maxQuestions: 15,
+    minQuestions: 8,
   },
   2: {
     name: 'Creative Brainstorming',
     goal: 'Explore all possibilities without constraints and generate creative ideas',
     openingQuestion: 'Now that we understand the situation, what are some possible ways you could approach this?',
     followUpAreas: ['creative solutions', 'unconventional ideas', 'resources available', 'different perspectives', 'best/worst case scenarios'],
-    minQuestions: 5,
-    maxQuestions: 15,
+    minQuestions: 8,
   },
   3: {
     name: 'Formulate the Goal',
     goal: 'Define clear, specific, measurable objectives and success criteria',
     openingQuestion: 'Based on what we\'ve explored, what specific outcome would you like to achieve?',
     followUpAreas: ['specific metrics', 'timeline', 'success indicators', 'why this matters', 'realistic expectations'],
-    minQuestions: 5,
-    maxQuestions: 15,
+    minQuestions: 8,
   },
   4: {
     name: 'Initiate the Action Plan',
     goal: 'Create concrete, actionable steps with resources and timelines',
     openingQuestion: 'What\'s the first concrete step you can take toward your goal?',
     followUpAreas: ['action steps', 'resources needed', 'timeline', 'potential obstacles', 'backup plans'],
-    minQuestions: 5,
-    maxQuestions: 15,
+    minQuestions: 8,
   },
   5: {
     name: 'Nourish Accountability',
     goal: 'Set up tracking mechanisms, support systems, and anticipate obstacles',
     openingQuestion: 'How will you track your progress and stay accountable to your plan?',
     followUpAreas: ['tracking methods', 'support system', 'check-in frequency', 'obstacles to anticipate', 'celebration milestones'],
-    minQuestions: 5,
-    maxQuestions: 15,
+    minQuestions: 8,
   },
 };
 
@@ -59,6 +54,11 @@ export async function POST(req: NextRequest) {
 
     const stageInfo = STAGE_CONTEXTS[currentStage as keyof typeof STAGE_CONTEXTS];
     
+    // Detect if user is giving up or asking for answers
+    const lastUserMessage = messages[messages.length - 1]?.content?.toLowerCase() || '';
+    const isGivingUp = /\b(i don't know|don't know|give up|no idea|can't think|dunno|idk)\b/i.test(lastUserMessage);
+    const isAskingForAnswer = /\b(tell me|what should|give me|provide|suggest|just tell)\b/i.test(lastUserMessage) && lastUserMessage.length < 50;
+    
     const systemPrompt = `You are an expert ACF (Assess, Creative, Formulate, Initiate, Nourish) coaching AI assistant. You are currently in Stage ${currentStage}: ${stageInfo.name}.
 
 Your goal for this stage: ${stageInfo.goal}
@@ -69,20 +69,23 @@ Key areas to explore through follow-up questions: ${stageInfo.followUpAreas.join
 
 Guidelines:
 - Ask ONE thoughtful, open-ended question at a time
-- You should ask between ${stageInfo.minQuestions} to ${stageInfo.maxQuestions} questions for this stage
+- Minimum questions for this stage: ${stageInfo.minQuestions}
 - Current question count: ${questionCount}
 - Be empathetic, supportive, and encouraging
 - Listen actively and build on the user's responses with follow-up questions
 - After each response, acknowledge what they shared, then ask a natural follow-up question
-- When you've gathered sufficient information (${stageInfo.minQuestions}-${stageInfo.maxQuestions} questions), acknowledge their insights and let them know they can move to the next stage
 - Keep responses concise (2-3 sentences max)
 - Use coaching techniques: powerful questions, reflective listening, acknowledgment
-- After ${stageInfo.minQuestions} questions, you can say: "Great progress! Feel free to click 'Next Stage' when you're ready, or we can explore this further."
-- IMPORTANT: If this is question ${stageInfo.maxQuestions} (current count: ${questionCount}), you MUST end with: "This is our final question for this stage. Please click the 'Continue to Next Stage' button below when you're ready to proceed."
+${isGivingUp || isAskingForAnswer ? `
+- CRITICAL: The user just said "${lastUserMessage.substring(0, 50)}". DO NOT provide direct answers. Instead, encourage them to think deeper. Say something like: "I can see this is challenging. Let's take a moment - what's the first thought that comes to mind, even if it feels incomplete?" or "That's okay! Sometimes we need to dig a little. What would you say if you had to make your best guess right now?"
+` : ''}
+- After ${stageInfo.minQuestions} questions, at the END of each of your responses, add this reminder: "\n\n💡 You can move to the next stage when ready, or we can continue exploring this further."
+- Continue the conversation naturally even after ${stageInfo.minQuestions} questions - there is no maximum limit
+- Always end with ONE follow-up question to keep the conversation going
 
 Session type: ${sessionType === 'coach_led' ? 'Coach-Led (you are coaching someone else)' : 'Self-Coaching (user is working on their own goals)'}
 
-Remember: You're a supportive coach, not a therapist. Focus on forward momentum and actionable insights. Ask only ONE question per response.`;
+Remember: You're a supportive coach, not a therapist. Focus on forward momentum and actionable insights. Ask only ONE question per response. NEVER provide direct answers - always guide users to find their own insights.`;
 
     // Use Google Gemini API
     const apiKey = process.env.GEMINI_API_KEY;

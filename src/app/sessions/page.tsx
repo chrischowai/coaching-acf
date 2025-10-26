@@ -227,22 +227,58 @@ export default function SessionsPage() {
                           </p>
                         </td>
 
-                        {/* Progress */}
+                        {/* Progress - 5 ACF Stage Pills */}
                         <td className="px-6 py-4">
-                          <div className="space-y-2 min-w-[140px]">
-                            <div className="flex items-center justify-between text-xs text-slate-600">
-                              <span>Stage {session.current_stage} of 5</span>
-                              <span className="font-semibold">{(session.current_stage / 5) * 100}%</span>
+                          <div className="space-y-2 min-w-[280px]">
+                            {/* Stage Labels */}
+                            <div className="text-xs text-slate-600 mb-1">
+                              Stage {session.current_stage} of 5 • {(session.current_stage / 5 * 100).toFixed(0)}%
                             </div>
-                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full transition-all ${
-                                  session.is_complete
-                                    ? 'bg-gradient-to-r from-green-500 to-emerald-500'
-                                    : 'bg-gradient-to-r from-amber-500 to-orange-500'
-                                }`}
-                                style={{ width: `${(session.current_stage / 5) * 100}%` }}
-                              />
+                            {/* 5 ACF Stage Pills */}
+                            <div className="flex items-center gap-1.5">
+                              {[
+                                { name: 'Check In', stage: 1 },
+                                { name: 'Starting Point', stage: 2 },
+                                { name: 'Connect', stage: 3 },
+                                { name: 'Finish', stage: 4 },
+                                { name: 'Check Out', stage: 5 }
+                              ].map((item) => {
+                                const isCompleted = session.current_stage > item.stage;
+                                const isCurrent = session.current_stage === item.stage;
+                                const isPending = session.current_stage < item.stage;
+                                
+                                return (
+                                  <div
+                                    key={item.stage}
+                                    className="group relative flex-1"
+                                    title={item.name}
+                                  >
+                                    <div
+                                      className={`
+                                        h-7 rounded-md flex items-center justify-center text-[10px] font-semibold
+                                        transition-all duration-200
+                                        ${
+                                          isCompleted
+                                            ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-sm'
+                                            : isCurrent
+                                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md animate-pulse'
+                                            : 'bg-slate-200 text-slate-400 border border-slate-300'
+                                        }
+                                      `}
+                                    >
+                                      {isCompleted ? (
+                                        <CheckCircle className="h-3.5 w-3.5" />
+                                      ) : (
+                                        item.stage
+                                      )}
+                                    </div>
+                                    {/* Tooltip */}
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                      {item.name}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         </td>
