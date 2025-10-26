@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getSessions, deleteSession } from '@/lib/supabase/sessions';
-import { ArrowLeft, Calendar, CheckCircle, Clock, Trash2, Eye, FileText } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { getSessions, deleteSession, getSession } from '@/lib/supabase/sessions';
+import { ArrowLeft, Calendar, CheckCircle, Clock, Trash2, Eye, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -16,6 +17,8 @@ interface Session {
   is_complete: boolean;
   created_at: string;
   updated_at: string;
+  executive_summary?: string;
+  key_heading?: string;
 }
 
 export default function SessionsPage() {
@@ -23,6 +26,8 @@ export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     loadSessions();
@@ -31,7 +36,48 @@ export default function SessionsPage() {
   const loadSessions = async () => {
     try {
       const data = await getSessions();
-      setSessions(data as Session[]);
+      
+      // For completed sessions, fetch and parse summaries
+      const sessionsWithSummaries = await Promise.all(
+        (data as Session[]).map(async (session) => {
+          if (session.is_complete) {
+            try {
+              const { stages } = await getSession(session.id);
+              const allStageConversations = stages.map((stage: any) => ({
+                stageName: stage.stage_name,
+                messages: stage.responses?.messages || []
+              }));
+              
+              // Generate summary for this session
+              const summaryResponse = await fetch('/api/summary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  allStageConversations,
+                  sessionType: session.session_type
+                })
+              });
+              
+              if (summaryResponse.ok) {
+                const { summary } = await summaryResponse.json();
+                const execMatch = summary.match(/\*\*Executive Summary\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+                const goalMatch = summary.match(/to become.*?(?=\.|,|within)/i);
+                
+                return {
+                  ...session,
+                  executive_summary: execMatch ? execMatch[1].trim().substring(0, 200) + '...' : 'Summary not available',
+                  key_heading: goalMatch ? goalMatch[0].replace(/^to become\s*/i, '').trim() : 'Coaching Session'
+                };
+              }
+            } catch (error) {
+              console.error('Failed to generate summary for session:', session.id, error);
+            }
+          }
+          return session;
+        })
+      );
+      
+      setSessions(sessionsWithSummaries);
     } catch (error) {
       console.error('Failed to load sessions:', error);
       toast.error('Failed to load sessions');
@@ -55,6 +101,18 @@ export default function SessionsPage() {
       setDeletingId(null);
     }
   };
+
+  // Pagination calculations
+  const totalPages = Math.ceil(sessions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentSessions = sessions.slice(startIndex, endIndex);
+  const totalSessions = sessions.length;
+
+  const goToFirstPage = () => setCurrentPage(1);
+  const goToLastPage = () => setCurrentPage(totalPages);
+  const goToPreviousPage = () => setCurrentPage(Math.max(1, currentPage - 1));
+  const goToNextPage = () => setCurrentPage(Math.min(totalPages, currentPage + 1));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -102,96 +160,243 @@ export default function SessionsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sessions.map((session) => (
-              <Card
-                key={session.id}
-                className={`border-2 shadow-lg hover:shadow-xl transition-shadow ${
-                  session.is_complete
-                    ? 'border-green-200 bg-gradient-to-br from-green-50 to-emerald-50'
-                    : 'border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50'
-                }`}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        {session.is_complete ? (
-                          <CheckCircle className="h-5 w-5 text-green-600" />
-                        ) : (
-                          <Clock className="h-5 w-5 text-amber-600" />
-                        )}
-                        <span className={`text-xs font-bold uppercase tracking-wide ${
-                          session.is_complete ? 'text-green-700' : 'text-amber-700'
-                        }`}>
-                          {session.is_complete ? 'Completed' : 'In Progress'}
-                        </span>
+          <Card className="shadow-lg">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-indigo-100">
+                    <tr>
+                      <th className="px-4 py-4 text-center text-sm font-semibold text-slate-700 w-16">#</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Coaching Content</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Date</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Progress</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Executive Summary</th>
+                      <th className="px-6 py-4 text-center text-sm font-semibold text-slate-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {currentSessions.map((session, index) => (
+                      <tr
+                        key={session.id}
+                        className="hover:bg-slate-50 transition-colors"
+                      >
+                        {/* Number */}
+                        <td className="px-4 py-4 text-center">
+                          <div className="flex items-center justify-center">
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-sm">
+                              {startIndex + index + 1}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Coaching Content */}
+                        <td className="px-6 py-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              {session.is_complete ? (
+                                <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Completed
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  In Progress
+                                </Badge>
+                              )}
+                              <Badge variant="outline">
+                                {session.session_type === 'coach_led' ? 'Coach-Led' : 'Self-Coaching'}
+                              </Badge>
+                            </div>
+                            <h3 className="font-semibold text-slate-900 text-base">
+                              {session.key_heading || 'Coaching Session'}
+                            </h3>
+                          </div>
+                        </td>
+
+                        {/* Date */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <Calendar className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              {format(new Date(session.created_at), 'MMM dd, yyyy')}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {format(new Date(session.created_at), 'h:mm a')}
+                          </p>
+                        </td>
+
+                        {/* Progress */}
+                        <td className="px-6 py-4">
+                          <div className="space-y-2 min-w-[140px]">
+                            <div className="flex items-center justify-between text-xs text-slate-600">
+                              <span>Stage {session.current_stage} of 5</span>
+                              <span className="font-semibold">{(session.current_stage / 5) * 100}%</span>
+                            </div>
+                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full transition-all ${
+                                  session.is_complete
+                                    ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                                    : 'bg-gradient-to-r from-amber-500 to-orange-500'
+                                }`}
+                                style={{ width: `${(session.current_stage / 5) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Executive Summary */}
+                        <td className="px-6 py-4 max-w-md">
+                          {session.executive_summary ? (
+                            <p className="text-sm text-slate-600 leading-relaxed line-clamp-3">
+                              {session.executive_summary}
+                            </p>
+                          ) : session.is_complete ? (
+                            <p className="text-sm text-slate-400 italic">Loading summary...</p>
+                          ) : (
+                            <p className="text-sm text-slate-400 italic">Complete session to view summary</p>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <Button
+                              onClick={() => router.push(`/sessions/${session.id}`)}
+                              size="sm"
+                              variant="outline"
+                              className="hover:bg-indigo-50"
+                            >
+                              <Eye className="h-3 w-3 mr-1" />
+                              View
+                            </Button>
+                            <Button
+                              onClick={() => router.push(`/sessions/${session.id}/summary`)}
+                              size="sm"
+                              variant="outline"
+                              className="hover:bg-purple-50"
+                              disabled={!session.is_complete}
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              Summary
+                            </Button>
+                            <Button
+                              onClick={() => handleDelete(session.id)}
+                              variant="outline"
+                              size="sm"
+                              className="border-red-200 text-red-600 hover:bg-red-50"
+                              disabled={deletingId === session.id}
+                            >
+                              {deletingId === session.id ? (
+                                <Clock className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="border-t border-slate-200 px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    {/* Page Info */}
+                    <div className="text-sm text-slate-600">
+                      Showing <span className="font-semibold text-slate-900">{startIndex + 1}</span> to{' '}
+                      <span className="font-semibold text-slate-900">{Math.min(endIndex, totalSessions)}</span> of{' '}
+                      <span className="font-semibold text-slate-900">{totalSessions}</span> sessions
+                    </div>
+
+                    {/* Navigation Buttons */}
+                    <div className="flex items-center gap-2">
+                      {/* First Page */}
+                      <Button
+                        onClick={goToFirstPage}
+                        disabled={currentPage === 1}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronsLeft className="h-4 w-4" />
+                      </Button>
+
+                      {/* Previous Page */}
+                      <Button
+                        onClick={goToPreviousPage}
+                        disabled={currentPage === 1}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter((page) => {
+                            // Show first page, last page, current page, and adjacent pages
+                            return (
+                              page === 1 ||
+                              page === totalPages ||
+                              (page >= currentPage - 1 && page <= currentPage + 1)
+                            );
+                          })
+                          .map((page, index, array) => {
+                            // Add ellipsis when there's a gap
+                            const showEllipsisBefore = index > 0 && page - array[index - 1] > 1;
+                            return (
+                              <div key={page} className="flex items-center gap-1">
+                                {showEllipsisBefore && (
+                                  <span className="px-2 text-slate-400">...</span>
+                                )}
+                                <Button
+                                  onClick={() => setCurrentPage(page)}
+                                  size="sm"
+                                  variant={currentPage === page ? "default" : "outline"}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  {page}
+                                </Button>
+                              </div>
+                            );
+                          })}
                       </div>
-                      <CardTitle className="text-lg">
-                        {session.session_type === 'coach_led' ? 'Coach-Led' : 'Self-Coaching'}
-                      </CardTitle>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <Calendar className="h-4 w-4" />
-                      <span>{format(new Date(session.created_at), 'MMM dd, yyyy')}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <CheckCircle className="h-4 w-4" />
-                      <span>Stage {session.current_stage} of 5</span>
-                    </div>
 
-                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden mt-3">
-                      <div
-                        className={`h-full ${
-                          session.is_complete
-                            ? 'bg-gradient-to-r from-green-500 to-emerald-500'
-                            : 'bg-gradient-to-r from-amber-500 to-orange-500'
-                        }`}
-                        style={{ width: `${(session.current_stage / 5) * 100}%` }}
-                      />
-                    </div>
+                      {/* Next Page */}
+                      <Button
+                        onClick={goToNextPage}
+                        disabled={currentPage === totalPages}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
 
-                    <div className="flex gap-2 mt-4">
+                      {/* Last Page */}
                       <Button
-                        onClick={() => router.push(`/sessions/${session.id}`)}
+                        onClick={goToLastPage}
+                        disabled={currentPage === totalPages}
                         size="sm"
                         variant="outline"
+                        className="h-8 w-8 p-0"
                       >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                      <Button
-                        onClick={() => router.push(`/sessions/${session.id}/summary`)}
-                        size="sm"
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        <FileText className="h-3 w-3 mr-1" />
-                        Summary
-                      </Button>
-                      <Button
-                        onClick={() => handleDelete(session.id)}
-                        variant="outline"
-                        size="sm"
-                        className="border-red-200 text-red-600 hover:bg-red-50"
-                        disabled={deletingId === session.id}
-                      >
-                        {deletingId === session.id ? (
-                          <Clock className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
+                        <ChevronsRight className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

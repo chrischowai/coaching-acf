@@ -248,10 +248,10 @@ export default function SessionSummaryPage() {
             {/* PDF Content Area */}
             <div ref={contentRef} className="bg-white print:p-8">
               {/* Professional Header */}
-              <Card className="border-none shadow-none mb-8">
-                <CardHeader className="space-y-6 pb-8">
+              <Card className="border-none shadow-none mb-6">
+                <CardHeader className="space-y-4 pb-6">
                   {/* Title & Date */}
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Badge variant="outline" className="text-sm font-medium">
                         <Calendar className="h-3 w-3 mr-1.5" />
@@ -267,26 +267,6 @@ export default function SessionSummaryPage() {
                     <p className="text-xl text-indigo-600 font-semibold">
                       {extractKeyHeading(parseSummary(summary).executiveSummary || parseSummary(summary).goal || summary)}
                     </p>
-                  </div>
-
-                  <Separator />
-
-                  {/* 5 Stages Indicator */}
-                  <div className="grid grid-cols-5 gap-3">
-                    {[
-                      { name: 'Assess', icon: Target },
-                      { name: 'Creative', icon: Target },
-                      { name: 'Formulate', icon: Target },
-                      { name: 'Initiate', icon: ListChecks },
-                      { name: 'Nourish', icon: TrendingUp }
-                    ].map(({ name, icon: Icon }, idx) => (
-                      <div key={idx} className="flex flex-col items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="p-2 bg-indigo-100 rounded-full">
-                          <Icon className="h-4 w-4 text-indigo-600" />
-                        </div>
-                        <p className="text-xs font-medium text-slate-700">{name}</p>
-                      </div>
-                    ))}
                   </div>
                 </CardHeader>
               </Card>
