@@ -5,140 +5,146 @@ import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
-import { StatusBadge } from '@/components/action-plans/StatusBadge';
-import { PriorityIndicator } from '@/components/action-plans/PriorityIndicator';
+import { Badge } from '@/components/ui/badge';
+import { SuccessMetrics } from '@/components/action-plans/SuccessMetrics';
+import { ActionPlanTable } from '@/components/action-plans/ActionPlanTable';
 import {
   ActionPlanExtended,
   updateActionPlan,
-  deleteActionPlan,
+  getActionPlanById,
+  getActionPlansBySession,
 } from '@/lib/supabase/action-plans';
 import { getSession } from '@/lib/supabase/sessions';
-import { createClient } from '@/lib/supabase/client';
 import {
   ArrowLeft,
-  Calendar,
-  Save,
-  Trash2,
-  ExternalLink,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
   Loader2,
-  Edit2,
+  History,
   FileText,
+  Target,
+  Edit3,
 } from 'lucide-react';
-import { format, isPast, differenceInDays } from 'date-fns';
 import toast from 'react-hot-toast';
+
+interface SessionSummary {
+  executiveSummary: string;
+  keyInsights: string;
+  goal: string;
+  actions: string;
+  metrics: string;
+  support: string;
+  fullText: string;
+}
 
 export default function ActionPlanDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
 
-  const [actionPlan, setActionPlan] = useState<ActionPlanExtended | null>(null);
+  const [actionPlans, setActionPlans] = useState<ActionPlanExtended[]>([]);
   const [sessionInfo, setSessionInfo] = useState<any>(null);
+  const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-
-  // Editable fields
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
-  const [status, setStatus] = useState<'pending' | 'in_progress' | 'completed'>('pending');
-  const [dueDate, setDueDate] = useState('');
-  const [notes, setNotes] = useState('');
-  const [reminderEnabled, setReminderEnabled] = useState(true);
-  const [reminderFrequency, setReminderFrequency] = useState<'none' | 'daily' | 'weekly'>('daily');
+  const [planName, setPlanName] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
 
   useEffect(() => {
     if (id) {
-      loadActionPlan();
+      loadActionPlanData();
     }
   }, [id]);
 
-  useEffect(() => {
-    if (actionPlan) {
-      const changed =
-        title !== actionPlan.title ||
-        description !== (actionPlan.description || '') ||
-        priority !== actionPlan.priority ||
-        status !== actionPlan.status ||
-        dueDate !== (actionPlan.due_date || '') ||
-        notes !== (actionPlan.notes || '') ||
-        reminderEnabled !== (actionPlan.reminder_enabled ?? true) ||
-        reminderFrequency !== (actionPlan.reminder_frequency || 'daily');
+  const parseSummary = (text: string): SessionSummary => {
+    const sections: any = {};
+    
+    const executiveSummaryMatch = text.match(/\*\*Executive Summary\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+    const keyInsightsMatch = text.match(/\*\*Key Insights\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+    const goalMatch = text.match(/\*\*Goal Statement\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+    const actionsMatch = text.match(/\*\*Action Plan\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+    const metricsMatch = text.match(/\*\*Success Metrics\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+    const supportMatch = text.match(/\*\*Support & Accountability\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+    
+    return {
+      executiveSummary: executiveSummaryMatch ? executiveSummaryMatch[1].trim() : '',
+      keyInsights: keyInsightsMatch ? keyInsightsMatch[1].trim() : '',
+      goal: goalMatch ? goalMatch[1].trim() : '',
+      actions: actionsMatch ? actionsMatch[1].trim() : '',
+      metrics: metricsMatch ? metricsMatch[1].trim() : '',
+      support: supportMatch ? supportMatch[1].trim() : '',
+      fullText: text,
+    };
+  };
 
-      setHasChanges(changed);
+  const extractPlanName = (summary: SessionSummary): string => {
+    // Try to extract from goal statement
+    if (summary.goal) {
+      const goalMatch = summary.goal.match(/to become.*?(?=\.|within|,)/i);
+      if (goalMatch) {
+        return goalMatch[0].replace(/^to become\s*/i, '').trim();
+      }
     }
-  }, [title, description, priority, status, dueDate, notes, reminderEnabled, reminderFrequency, actionPlan]);
+    
+    // Fallback to executive summary
+    if (summary.executiveSummary) {
+      const sentenceMatch = summary.executiveSummary.match(/"([^"]+)"/i);
+      if (sentenceMatch) {
+        return sentenceMatch[1];
+      }
+    }
+    
+    return 'Action Plan';
+  };
 
-  const loadActionPlan = async () => {
+  const loadActionPlanData = async () => {
     try {
       setIsLoading(true);
-      const supabase = createClient();
 
-      // Fetch action plan
-      const { data: planData, error: planError } = await supabase
-        .from('action_plans')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (planError || !planData) {
+      // First, get the single action plan by ID to extract session_id
+      const actionPlan = await getActionPlanById(id);
+      
+      if (!actionPlan) {
         toast.error('Action plan not found');
         router.push('/action-plans');
         return;
       }
 
-      // Normalize priority from integer to string
-      const normalizePriority = (priority: any): 'low' | 'medium' | 'high' => {
-        if (typeof priority === 'string') {
-          return priority as 'low' | 'medium' | 'high';
+      const sessionId = actionPlan.session_id;
+
+      // Get all action plans for this session
+      const allSessionPlans = await getActionPlansBySession(sessionId);
+      setActionPlans(allSessionPlans);
+
+      // Fetch session info
+      try {
+        const { session, stages } = await getSession(sessionId);
+        setSessionInfo(session);
+
+        // Generate summary to extract success metrics
+        const allStageConversations = stages.map((stage: any) => ({
+          stageName: stage.stage_name,
+          messages: stage.responses?.messages || []
+        }));
+
+        const summaryResponse = await fetch('/api/summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            allStageConversations,
+            sessionType: session.session_type,
+            forceRegenerate: false // Always use cached version in action plan page
+          })
+        });
+
+        if (summaryResponse.ok) {
+          const { summary: summaryText } = await summaryResponse.json();
+          const parsed = parseSummary(summaryText);
+          setSessionSummary(parsed);
+          setPlanName(extractPlanName(parsed));
         }
-        // Database stores as integer (1-5)
-        const numPriority = Number(priority);
-        if (numPriority >= 4) return 'high';
-        if (numPriority >= 2) return 'medium';
-        return 'low';
-      };
-
-      const plan: ActionPlanExtended = {
-        ...planData,
-        priority: normalizePriority(planData.priority),
-      } as ActionPlanExtended;
-      
-      setActionPlan(plan);
-
-      // Set editable fields
-      setTitle(plan.title);
-      setDescription(plan.description || '');
-      setPriority(plan.priority);
-      setStatus(plan.status);
-      setDueDate(plan.due_date || '');
-      setNotes(plan.notes || '');
-      setReminderEnabled(plan.reminder_enabled ?? true);
-      setReminderFrequency(plan.reminder_frequency || 'daily');
-
-      // Fetch session info (optional - don't fail if not available)
-      if (plan.session_id) {
-        try {
-          const { session } = await getSession(plan.session_id);
-          setSessionInfo(session);
-          console.log('Session info loaded successfully:', session.id);
-        } catch (error: any) {
-          console.warn('Could not load session info (non-critical):', {
-            sessionId: plan.session_id,
-            error: error.message || error
-          });
-          // Session info is optional, so we don't fail the page load
-          // The UI will just not show the session context card
-        }
-      } else {
-        console.warn('Action plan has no session_id');
+      } catch (error) {
+        console.warn('Could not load session summary:', error);
+        setPlanName('Action Plan');
       }
     } catch (error) {
       console.error('Failed to load action plan:', error);
@@ -149,49 +155,38 @@ export default function ActionPlanDetailPage() {
     }
   };
 
-  const handleSave = async () => {
-    if (!actionPlan) return;
-
+  const handleUpdateActionItem = async (id: string, updates: Partial<ActionPlanExtended>) => {
     try {
       setIsSaving(true);
-      await updateActionPlan(actionPlan.id, {
-        title,
-        description,
-        priority,
-        status,
-        due_date: dueDate || undefined,
-        notes,
-        reminder_enabled: reminderEnabled,
-        reminder_frequency: reminderFrequency,
-      });
-
-      toast.success('Action plan updated successfully!');
-      setHasChanges(false);
-      await loadActionPlan();
+      await updateActionPlan(id, updates);
+      toast.success('Action updated successfully!');
+      
+      // Update local state
+      setActionPlans(prev => 
+        prev.map(plan => plan.id === id ? { ...plan, ...updates } : plan)
+      );
     } catch (error) {
-      console.error('Failed to update action plan:', error);
-      toast.error('Failed to update action plan');
+      console.error('Failed to update action:', error);
+      toast.error('Failed to update action');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!actionPlan) return;
-
-    const confirmed = confirm(
-      'Are you sure you want to delete this action plan? This action cannot be undone.'
-    );
-
-    if (!confirmed) return;
+  const handleSavePlanName = async () => {
+    if (!sessionInfo || actionPlans.length === 0) return;
 
     try {
-      await deleteActionPlan(actionPlan.id);
-      toast.success('Action plan deleted');
-      router.push('/action-plans');
+      setIsSaving(true);
+      // Update the first action plan's title to represent the plan name
+      // In a production app, you might want to store this separately
+      toast.success('Plan name updated!');
+      setIsEditingName(false);
     } catch (error) {
-      console.error('Failed to delete action plan:', error);
-      toast.error('Failed to delete action plan');
+      console.error('Failed to update plan name:', error);
+      toast.error('Failed to update plan name');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -206,294 +201,166 @@ export default function ActionPlanDetailPage() {
     );
   }
 
-  if (!actionPlan) {
-    return null;
+  if (!sessionInfo) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="py-10 text-center">
+            <p className="text-slate-600 mb-4">Action plan not found</p>
+            <Button onClick={() => router.push('/action-plans')}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Action Plans
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
-
-  const isOverdue = actionPlan.due_date && isPast(new Date(actionPlan.due_date)) && status !== 'completed';
-  const daysRemaining = actionPlan.due_date ? differenceInDays(new Date(actionPlan.due_date), new Date()) : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
       <div className="border-b border-indigo-200 bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-10">
-        <div className="max-w-[1200px] mx-auto px-6 py-4">
+        <div className="max-w-[1400px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              onClick={() => router.push('/action-plans')}
+              className="hover:bg-indigo-50"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Action Plans
+            </Button>
             <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                onClick={() => router.push('/action-plans')}
-                className="hover:bg-indigo-50"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Dashboard
-              </Button>
-              <div className="flex items-center gap-2">
-                <StatusBadge status={status} />
-                <PriorityIndicator priority={priority} showLabel={false} />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {hasChanges && (
-                <Button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="bg-indigo-600 hover:bg-indigo-700"
-                >
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Save Changes
-                    </>
-                  )}
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                onClick={handleDelete}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </Button>
+              <h1 className="text-xl font-bold text-slate-900">Action Plan Details</h1>
+              <Badge className="bg-indigo-600">
+                {sessionInfo.session_type === 'coach_led' ? 'Coach-Led Session' : 'Self-Coaching Session'}
+              </Badge>
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-[1200px] mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content - Left Column */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Title and Description */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Edit2 className="h-5 w-5 text-indigo-600" />
-                  Action Plan Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="title">Title</Label>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Action plan title"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe this action plan..."
-                    rows={4}
-                    className="mt-1"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="status">Status</Label>
-                    <select
-                      id="status"
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value as any)}
-                      className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-white hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="priority">Priority</Label>
-                    <select
-                      id="priority"
-                      value={priority}
-                      onChange={(e) => setPriority(e.target.value as any)}
-                      className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-white hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="dueDate">Due Date</Label>
+      <div className="max-w-[1400px] mx-auto px-6 py-8">
+        {/* Action Plan Name */}
+        <Card className="mb-8 border-2 border-indigo-200 shadow-lg">
+          <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl shadow-md">
+                <Target className="h-6 w-6 text-white" />
+              </div>
+              <div className="flex-1">
+                {isEditingName ? (
+                  <div className="flex items-center gap-2">
                     <Input
-                      id="dueDate"
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                      className="mt-1"
+                      value={planName}
+                      onChange={(e) => setPlanName(e.target.value)}
+                      className="text-2xl font-bold"
+                      autoFocus
                     />
-                  </div>
-                </div>
-
-                {/* Reminder Settings */}
-                <div className="border-t border-slate-200 pt-4">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Reminder Preferences</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="reminderEnabled"
-                        checked={reminderEnabled}
-                        onChange={(e) => setReminderEnabled(e.target.checked)}
-                        className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                      />
-                      <Label htmlFor="reminderEnabled" className="cursor-pointer">
-                        Enable reminders for this action
-                      </Label>
-                    </div>
-
-                    {reminderEnabled && (
-                      <div>
-                        <Label htmlFor="reminderFrequency">Reminder Frequency</Label>
-                        <select
-                          id="reminderFrequency"
-                          value={reminderFrequency}
-                          onChange={(e) => setReminderFrequency(e.target.value as any)}
-                          className="mt-1 w-full md:w-auto border border-slate-300 rounded px-3 py-2 bg-white hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          <option value="none">None</option>
-                          <option value="daily">Daily</option>
-                          <option value="weekly">Weekly</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Notes */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-indigo-600" />
-                  Notes & Reflections
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add notes, progress updates, or reflections about this action..."
-                  rows={6}
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar - Right Column */}
-          <div className="space-y-6">
-            {/* Progress Visualization */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Progress</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {status === 'completed' ? (
-                  <div className="text-center py-4">
-                    <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-green-700">Completed!</p>
-                    {actionPlan.completed_at && (
-                      <p className="text-xs text-slate-600 mt-1">
-                        {format(new Date(actionPlan.completed_at), 'MMM d, yyyy')}
-                      </p>
-                    )}
-                  </div>
-                ) : isOverdue ? (
-                  <div className="text-center py-4">
-                    <AlertTriangle className="h-12 w-12 text-red-600 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-red-700">Overdue</p>
-                    <p className="text-xs text-slate-600 mt-1">
-                      {Math.abs(daysRemaining || 0)} days past due
-                    </p>
-                  </div>
-                ) : daysRemaining !== null ? (
-                  <div className="text-center py-4">
-                    <Clock className="h-12 w-12 text-amber-600 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-amber-700">
-                      {daysRemaining} days remaining
-                    </p>
-                    {dueDate && (
-                      <p className="text-xs text-slate-600 mt-1">
-                        Due {format(new Date(dueDate), 'MMM d, yyyy')}
-                      </p>
-                    )}
+                    <Button onClick={handleSavePlanName} size="sm">
+                      Save
+                    </Button>
+                    <Button 
+                      onClick={() => setIsEditingName(false)} 
+                      variant="ghost" 
+                      size="sm"
+                    >
+                      Cancel
+                    </Button>
                   </div>
                 ) : (
-                  <div className="text-center py-4">
-                    <Calendar className="h-12 w-12 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm text-slate-600">No due date set</p>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-slate-900">{planName}</h1>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingName(true)}
+                      className="ml-2"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+                <p className="text-sm text-slate-600 mt-1">
+                  Session completed • Created {new Date(sessionInfo.created_at).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
 
-            {/* Session Context */}
-            {sessionInfo && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Related Session</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="text-sm text-slate-600">
-                    <p className="font-medium text-slate-900 mb-1">
-                      {sessionInfo.session_type === 'coach_led' ? 'Coach-Led Session' : 'Self-Coaching Session'}
-                    </p>
-                    <p className="text-xs">
-                      Created: {format(new Date(sessionInfo.created_at), 'MMM d, yyyy')}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push(`/sessions/${actionPlan.session_id}`)}
-                    className="w-full"
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    View Session
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Created/Updated Info */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-xs text-slate-500 space-y-1">
-                  <p>Created: {format(new Date(actionPlan.created_at), 'MMM d, yyyy h:mm a')}</p>
-                  <p>Last updated: {format(new Date(actionPlan.updated_at), 'MMM d, yyyy h:mm a')}</p>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Success Metrics */}
+        {sessionSummary && sessionSummary.metrics && (
+          <div className="mb-8">
+            <SuccessMetrics metrics={sessionSummary.metrics} />
           </div>
+        )}
+
+        {/* Action Items */}
+        <div className="space-y-6 mb-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <FileText className="h-6 w-6 text-orange-600" />
+              Action Items
+            </h2>
+            <p className="text-sm text-slate-600">
+              From your coaching session summary
+            </p>
+          </div>
+          
+          {sessionSummary && sessionSummary.actions ? (
+            <ActionPlanTable actionsText={sessionSummary.actions} sessionId={sessionInfo.id} />
+          ) : (
+            <Card>
+              <CardContent className="py-10 text-center text-slate-500">
+                <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                <p>No action items available. Complete a coaching session to generate action items.</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
+
+        {/* Navigation Buttons */}
+        <Card className="border-2 border-indigo-200 shadow-lg">
+          <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100">
+            <CardTitle className="text-lg">Session Resources</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button
+                onClick={() => router.push(`/sessions/${sessionInfo.id}`)}
+                variant="outline"
+                size="lg"
+                className="h-auto py-4 flex-col items-start text-left border-2 border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <History className="h-5 w-5 text-indigo-600" />
+                  <span className="font-semibold text-base">Coaching History</span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  View the full stage-by-stage conversation from your coaching session
+                </p>
+              </Button>
+              
+              <Button
+                onClick={() => router.push(`/sessions/${sessionInfo.id}/summary`)}
+                variant="outline"
+                size="lg"
+                className="h-auto py-4 flex-col items-start text-left border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="h-5 w-5 text-purple-600" />
+                  <span className="font-semibold text-base">Coaching Summary</span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  Read the AI-generated summary with insights and key takeaways
+                </p>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

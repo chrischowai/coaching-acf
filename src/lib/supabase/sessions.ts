@@ -5,6 +5,7 @@ export interface SessionData {
   session_type: 'coach_led' | 'self_coaching';
   current_stage: number;
   is_complete: boolean;
+  summary?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -285,4 +286,42 @@ export async function getActionPlans(sessionId: string) {
   }
 
   return data;
+}
+
+/**
+ * Save the AI-generated summary for a session
+ */
+export async function saveSummary(sessionId: string, summary: string) {
+  const { data, error } = await supabase
+    .from('coaching_sessions')
+    .update({ summary })
+    .eq('id', sessionId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error saving summary:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Get the cached summary for a session
+ * Returns null if no summary exists
+ */
+export async function getCachedSummary(sessionId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('coaching_sessions')
+    .select('summary')
+    .eq('id', sessionId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching cached summary:', error);
+    throw error;
+  }
+
+  return data?.summary || null;
 }

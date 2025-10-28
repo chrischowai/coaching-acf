@@ -32,7 +32,9 @@ export default function SessionSummaryPage() {
   const [summary, setSummary] = useState<string>('');
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCached, setIsCached] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,9 +43,13 @@ export default function SessionSummaryPage() {
     }
   }, [sessionId]);
 
-  const fetchSummary = async () => {
+  const fetchSummary = async (forceRegenerate = false) => {
     try {
-      setIsLoading(true);
+      if (forceRegenerate) {
+        setIsRegenerating(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
 
       // Fetch session data and stage responses
@@ -56,13 +62,15 @@ export default function SessionSummaryPage() {
         messages: stage.responses?.messages || []
       }));
 
-      // Generate summary
+      // Generate or fetch cached summary
       const summaryResponse = await fetch('/api/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          sessionId,
           allStageConversations,
-          sessionType: session.session_type
+          sessionType: session.session_type,
+          forceRegenerate
         })
       });
 
@@ -70,14 +78,20 @@ export default function SessionSummaryPage() {
         throw new Error('Failed to generate summary');
       }
 
-      const { summary: summaryText } = await summaryResponse.json();
+      const { summary: summaryText, cached } = await summaryResponse.json();
       setSummary(summaryText);
+      setIsCached(cached);
+      
+      if (forceRegenerate) {
+        toast.success('Summary regenerated successfully!');
+      }
     } catch (err) {
       console.error('Error fetching summary:', err);
       setError(err instanceof Error ? err.message : 'Failed to load summary');
       toast.error('Failed to generate summary');
     } finally {
       setIsLoading(false);
+      setIsRegenerating(false);
     }
   };
 
@@ -226,6 +240,22 @@ export default function SessionSummaryPage() {
           <>
             {/* Download/Print Button - Fixed Position */}
             <div className="flex justify-end gap-3 mb-6 no-print">
+              {isCached && (
+                <Button
+                  onClick={() => fetchSummary(true)}
+                  size="lg"
+                  variant="outline"
+                  className="gap-2"
+                  disabled={isRegenerating}
+                >
+                  {isRegenerating ? (
+                    <Clock className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                  {isRegenerating ? 'Regenerating...' : 'Regenerate Summary'}
+                </Button>
+              )}
               <Button
                 onClick={() => window.print()}
                 size="lg"

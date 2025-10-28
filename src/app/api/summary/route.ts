@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { saveSummary, getCachedSummary } from '@/lib/supabase/sessions';
 
 export async function POST(req: NextRequest) {
   try {
-    const { allStageConversations, sessionType } = await req.json();
+    const { allStageConversations, sessionType, sessionId, forceRegenerate = false } = await req.json();
+
+    // Check if we have a cached summary (unless force regenerate is true)
+    if (sessionId && !forceRegenerate) {
+      try {
+        const cachedSummary = await getCachedSummary(sessionId);
+        if (cachedSummary) {
+          console.log('Returning cached summary for session:', sessionId);
+          return NextResponse.json({ summary: cachedSummary, cached: true });
+        }
+      } catch (error) {
+        console.warn('Failed to fetch cached summary, generating new one:', error);
+      }
+    }
 
     const systemPrompt = `You are an expert coaching summarizer. Based on a complete 5-stage ACF coaching session, generate a comprehensive summary with action plan.
 
@@ -91,7 +105,18 @@ Session Type: ${sessionType === 'coach_led' ? 'Coach-Led Session' : 'Self-Coachi
     const data = await response.json();
     const summary = data.candidates[0].content.parts[0].text;
 
-    return NextResponse.json({ summary });
+    // Save the summary to the database for future use
+    if (sessionId) {
+      try {
+        await saveSummary(sessionId, summary);
+        console.log('Summary cached successfully for session:', sessionId);
+      } catch (error) {
+        console.error('Failed to cache summary:', error);
+        // Don't fail the request if caching fails
+      }
+    }
+
+    return NextResponse.json({ summary, cached: false });
   } catch (error) {
     console.error('Summary generation error:', error);
     return NextResponse.json(

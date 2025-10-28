@@ -10,7 +10,7 @@ export interface ActionPlanExtended {
   status: 'pending' | 'in_progress' | 'completed';
   completed_at?: string;
   notes?: string;
-  reminder_frequency?: 'none' | 'daily' | 'weekly' | 'custom';
+  reminder_frequency?: 'none' | 'hourly' | 'daily' | 'weekly' | 'monthly';
   last_reminder_sent?: string;
   reminder_enabled?: boolean;
   created_at: string;
@@ -71,6 +71,24 @@ export async function getAllActionPlans(status?: string) {
   }
 
   return data ? data.map(normalizeActionPlan) : [];
+}
+
+/**
+ * Get a single action plan by ID
+ */
+export async function getActionPlanById(id: string) {
+  const { data, error } = await supabase
+    .from('action_plans')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('Error fetching action plan:', error);
+    throw error;
+  }
+
+  return data ? normalizeActionPlan(data) : null;
 }
 
 /**
