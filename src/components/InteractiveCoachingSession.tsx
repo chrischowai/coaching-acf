@@ -357,14 +357,16 @@ export default function InteractiveCoachingSession({
         } else {
           const errorData = await actionsResponse.json();
           console.error('❌ Failed to create action plans:', errorData);
-          toast.warning('Session completed! Please check Action Plans page.', {
+          toast('Session completed! Please check Action Plans page.', {
             duration: 5000,
+            icon: '⚠️',
           });
         }
       } catch (actionError) {
         console.error('❌ Action extraction error:', actionError);
-        toast.warning('Session completed! Action plans may not have been created.', {
+        toast('Session completed! Action plans may not have been created.', {
           duration: 5000,
+          icon: '⚠️',
         });
       }
       

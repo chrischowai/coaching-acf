@@ -13,6 +13,8 @@ export interface ActionPlanExtended {
   completed_at?: string;
   notes?: string;
   coaching_theme?: string;  // Coaching theme from session summary
+  reminder_frequency?: 'none' | 'hourly' | 'daily' | 'weekly' | 'monthly';
+  reminder_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }

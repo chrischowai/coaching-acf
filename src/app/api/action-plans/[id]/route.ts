@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+// Type definition for action plan
+type ActionPlan = {
+  id?: string;
+  session_id?: string;
+  title: string;
+  description?: string;
+  notes?: string;
+  due_date?: string;
+  priority?: number | string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 // Helper function to update session summary with current action plans
 async function updateSessionSummary(supabase: any, sessionId: string) {
   console.log('=== Starting updateSessionSummary for session:', sessionId);
@@ -17,7 +31,10 @@ async function updateSessionSummary(supabase: any, sessionId: string) {
     return;
   }
   
-  console.log('Found action plans:', actionPlans.length);
+  // Type assertion for action plans
+  const typedActionPlans = actionPlans as ActionPlan[];
+  
+  console.log('Found action plans:', typedActionPlans.length);
 
   // Fetch current session summary
   const { data: session, error: sessionError } = await supabase
@@ -44,7 +61,7 @@ async function updateSessionSummary(supabase: any, sessionId: string) {
   };
 
   // Generate new action plan text matching the original format
-  const newActionPlanText = actionPlans.map((plan, index) => {
+  const newActionPlanText = typedActionPlans.map((plan, index) => {
     // Format date to match original format if exists
     let deadline = '';
     if (plan.due_date) {
