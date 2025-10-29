@@ -129,7 +129,7 @@ export default function SessionsPage() {
               Back to Home
             </Button>
             <div className="text-right">
-              <h1 className="text-2xl font-bold text-slate-900">Session History</h1>
+              <h1 className="text-2xl font-bold text-slate-900">Coaching History</h1>
               <p className="text-sm text-slate-500">View and manage your coaching sessions</p>
             </div>
           </div>

@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { UserCircle, Users, ArrowRight, CheckCircle, History, Target, AlertTriangle, Clock } from 'lucide-react';
+import { Brain, ArrowRight, CheckCircle, History, Target, AlertTriangle, Clock, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getActionPlanStats, getOverdueActionPlans, getActionsPlansDueSoon, ActionPlanExtended } from '@/lib/supabase/action-plans';
 
@@ -38,64 +37,46 @@ export default function Home() {
   };
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="container mx-auto px-4 py-16">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-950 dark:via-slate-900 dark:to-indigo-950">
+      <div className="container mx-auto px-4 py-12">
         {/* Header */}
-        <div className="text-center mb-16">
-          <div className="flex justify-end gap-3 mb-4">
-            <Button
-              variant="outline"
-              onClick={() => router.push('/action-plans')}
-              className="border-2 border-green-200 hover:bg-green-50 relative"
-            >
-              <Target className="mr-2 h-4 w-4" />
-              Action Plans
-              {pendingCount > 0 && (
-                <Badge className="ml-2 bg-green-600 hover:bg-green-600 text-white px-2 py-0.5 text-xs">
-                  {pendingCount}
-                </Badge>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => router.push('/sessions')}
-              className="border-2 border-indigo-200 hover:bg-indigo-50"
-            >
-              <History className="mr-2 h-4 w-4" />
-              View Session History
-            </Button>
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-950 dark:to-indigo-950 border border-blue-200 dark:border-blue-800">
+            <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Professional AI Coaching Platform</span>
           </div>
-          <Badge className="mb-4 bg-primary text-primary-foreground">
-            Professional Coaching Platform
-          </Badge>
-          <h1 className="text-5xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
-            ACF Coaching Flow
+          <h1 className="text-6xl font-extrabold mb-6 text-slate-900 dark:text-slate-100">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 dark:from-blue-400 dark:via-indigo-400 dark:to-purple-400">
+              ACF Coaching Flow
+            </span>
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            A structured 5-stage coaching framework designed to transform insights into actionable outcomes
+          <p className="text-lg font-medium text-slate-700 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
+            A structured <span className="font-semibold text-blue-600 dark:text-blue-400">5-stage coaching framework</span> designed to transform insights into <span className="font-semibold text-indigo-600 dark:text-indigo-400">actionable outcomes</span>
           </p>
         </div>
 
         {/* Action Plan Alerts */}
         {!isLoading && (overdueActions.length > 0 || dueSoonActions.length > 0) && (
-          <div className="max-w-5xl mx-auto mb-8 space-y-4">
+          <div className="max-w-4xl mx-auto mb-10 space-y-3">
             {/* Overdue Actions Alert */}
             {overdueActions.length > 0 && (
-              <Card className="border-2 border-red-200 bg-red-50">
-                <CardContent className="pt-6">
+              <Card className="border-l-4 border-l-red-500 bg-gradient-to-r from-red-50 to-white dark:from-red-950/20 dark:to-slate-900 shadow-lg">
+                <CardContent className="pt-5 pb-5">
                   <div className="flex items-start gap-4">
-                    <AlertTriangle className="h-6 w-6 text-red-600 flex-shrink-0 mt-1" />
+                    <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
+                      <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-red-900 mb-2">
+                      <h3 className="text-base font-semibold text-red-900 dark:text-red-100 mb-1">
                         {overdueActions.length} Overdue Action{overdueActions.length > 1 ? 's' : ''}
                       </h3>
-                      <p className="text-sm text-red-700 mb-3">
-                        You have action plans that are past their due date. Review and update them to stay on track.
+                      <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                        Action plans past their due date. Review and update to stay on track.
                       </p>
                       <div className="space-y-2">
-                        {overdueActions.slice(0, 3).map((action) => (
-                          <div key={action.id} className="flex items-center justify-between bg-white rounded p-2 text-sm">
-                            <span className="font-medium text-slate-900">{action.title}</span>
+                        {overdueActions.slice(0, 2).map((action) => (
+                          <div key={action.id} className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-lg p-3 text-sm shadow-sm">
+                            <span className="font-medium text-slate-900 dark:text-slate-100">{action.title}</span>
                             <Button
                               size="sm"
                               variant="outline"
@@ -107,11 +88,11 @@ export default function Home() {
                           </div>
                         ))}
                       </div>
-                      {overdueActions.length > 3 && (
+                      {overdueActions.length > 2 && (
                         <Button
                           variant="link"
                           onClick={() => router.push('/action-plans')}
-                          className="mt-2 text-red-700 p-0"
+                          className="mt-2 text-red-700 dark:text-red-400 p-0 h-auto"
                         >
                           View all {overdueActions.length} overdue actions →
                         </Button>
@@ -124,24 +105,26 @@ export default function Home() {
 
             {/* Due Soon Actions Alert */}
             {dueSoonActions.length > 0 && (
-              <Card className="border-2 border-amber-200 bg-amber-50">
-                <CardContent className="pt-6">
+              <Card className="border-l-4 border-l-amber-500 bg-gradient-to-r from-amber-50 to-white dark:from-amber-950/20 dark:to-slate-900 shadow-lg">
+                <CardContent className="pt-5 pb-5">
                   <div className="flex items-start gap-4">
-                    <Clock className="h-6 w-6 text-amber-600 flex-shrink-0 mt-1" />
+                    <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                      <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-amber-900 mb-2">
+                      <h3 className="text-base font-semibold text-amber-900 dark:text-amber-100 mb-1">
                         {dueSoonActions.length} Action{dueSoonActions.length > 1 ? 's' : ''} Due Soon
                       </h3>
-                      <p className="text-sm text-amber-700 mb-3">
-                        These action plans are due within the next 3 days. Stay proactive!
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                        Action plans due within 3 days. Stay proactive!
                       </p>
                       <div className="space-y-2">
-                        {dueSoonActions.slice(0, 3).map((action) => (
-                          <div key={action.id} className="flex items-center justify-between bg-white rounded p-2 text-sm">
+                        {dueSoonActions.slice(0, 2).map((action) => (
+                          <div key={action.id} className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-lg p-3 text-sm shadow-sm">
                             <div>
-                              <span className="font-medium text-slate-900">{action.title}</span>
+                              <span className="font-medium text-slate-900 dark:text-slate-100">{action.title}</span>
                               {action.due_date && (
-                                <span className="text-xs text-slate-500 ml-2">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
                                   Due: {new Date(action.due_date).toLocaleDateString()}
                                 </span>
                               )}
@@ -157,11 +140,11 @@ export default function Home() {
                           </div>
                         ))}
                       </div>
-                      {dueSoonActions.length > 3 && (
+                      {dueSoonActions.length > 2 && (
                         <Button
                           variant="link"
                           onClick={() => router.push('/action-plans')}
-                          className="mt-2 text-amber-700 p-0"
+                          className="mt-2 text-amber-700 dark:text-amber-400 p-0 h-auto"
                         >
                           View all {dueSoonActions.length} upcoming actions →
                         </Button>
@@ -174,96 +157,113 @@ export default function Home() {
           </div>
         )}
 
-        {/* Mode Selection Cards */}
-        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto mb-16">
-          {/* Self-Coaching Mode */}
-          <Card className="hover:shadow-xl transition-all duration-300 border-2 hover:border-primary cursor-pointer group">
-            <CardHeader>
-              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <UserCircle className="w-10 h-10 text-primary" />
+        {/* Professional AI Coach - Main CTA */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <Card className="relative overflow-hidden border-2 border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600 transition-all duration-300 group shadow-xl hover:shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/30 dark:via-indigo-950/30 dark:to-purple-950/30 opacity-50"></div>
+            <CardHeader className="relative pb-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg group-hover:scale-110 transition-transform">
+                  <Brain className="w-12 h-12 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+                    Professional AI Coach
+                  </CardTitle>
+                  <CardDescription className="text-base mt-1 text-slate-600 dark:text-slate-400">
+                    Transform your goals with AI-powered guidance through structured coaching
+                  </CardDescription>
+                </div>
               </div>
-              <CardTitle className="text-2xl">Self-Coaching</CardTitle>
-              <CardDescription className="text-base">
-                Guide yourself through personal development with structured reflection
-              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="w-5 h-5 text-secondary mt-0.5 flex-shrink-0" />
-                  <span className="text-sm">Personal goal setting & reflection</span>
+            <CardContent className="relative space-y-6 pb-8">
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="flex flex-col items-center text-center p-4 bg-white/60 dark:bg-slate-800/60 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-blue-600 dark:text-blue-400 mb-2" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">AI-Powered Insights</span>
                 </div>
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="w-5 h-5 text-secondary mt-0.5 flex-shrink-0" />
-                  <span className="text-sm">Self-paced progress through 5 stages</span>
+                <div className="flex flex-col items-center text-center p-4 bg-white/60 dark:bg-slate-800/60 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-indigo-600 dark:text-indigo-400 mb-2" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">5-Stage Framework</span>
                 </div>
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="w-5 h-5 text-secondary mt-0.5 flex-shrink-0" />
-                  <span className="text-sm">Actionable plans with timeline visualization</span>
-                </div>
-              </div>
-              <Link href="/session/new?type=self_coaching">
-                <Button className="w-full mt-6 group-hover:scale-105 transition-transform">
-                  Start Self-Coaching Session
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          {/* Coach-Led Mode */}
-          <Card className="hover:shadow-xl transition-all duration-300 border-2 hover:border-secondary cursor-pointer group">
-            <CardHeader>
-              <div className="w-16 h-16 bg-secondary/10 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Users className="w-10 h-10 text-secondary" />
-              </div>
-              <CardTitle className="text-2xl">Coach-Led Session</CardTitle>
-              <CardDescription className="text-base">
-                Facilitate powerful coaching conversations with clients
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-                  <span className="text-sm">Guided question framework for coaches</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-                  <span className="text-sm">Client progress tracking & insights</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-                  <span className="text-sm">Professional session documentation</span>
+                <div className="flex flex-col items-center text-center p-4 bg-white/60 dark:bg-slate-800/60 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-purple-600 dark:text-purple-400 mb-2" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Actionable Plans</span>
                 </div>
               </div>
-              <Link href="/session/new?type=coach_led">
-                <Button className="w-full mt-6 group-hover:scale-105 transition-transform bg-secondary hover:bg-secondary/90">
-                  Start Coach-Led Session
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
+              <Button 
+                size="lg"
+                onClick={() => router.push('/session/self-coaching')}
+                className="w-full text-lg py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg group-hover:scale-[1.02] transition-all"
+              >
+                Start Coaching Session
+                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
             </CardContent>
           </Card>
         </div>
 
+        {/* Action Hub - Prominent Action Buttons */}
+        <div className="max-w-4xl mx-auto mb-16">
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card 
+              className="cursor-pointer hover:shadow-xl transition-all duration-300 border-2 border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600 group"
+              onClick={() => router.push('/action-plans')}
+            >
+              <CardContent className="pt-8 pb-8">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl group-hover:scale-110 transition-transform">
+                    <Target className="w-8 h-8 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1">Action Plans</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Track and manage your coaching action plans</p>
+                  </div>
+                  {pendingCount > 0 && (
+                    <Badge className="bg-green-600 hover:bg-green-600 text-white px-3 py-1">
+                      {pendingCount}
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card 
+              className="cursor-pointer hover:shadow-xl transition-all duration-300 border-2 border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-600 group"
+              onClick={() => router.push('/sessions')}
+            >
+              <CardContent className="pt-8 pb-8">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl group-hover:scale-110 transition-transform">
+                    <History className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1">Coaching History</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Review past sessions and insights</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
         {/* 5-Stage Process Overview */}
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-8">The 5-Stage ACF Process</h2>
-          <div className="grid sm:grid-cols-5 gap-4">
+          <h2 className="text-3xl font-bold text-center mb-10 text-slate-800 dark:text-slate-200">The 5-Stage ACF Process</h2>
+          <div className="grid sm:grid-cols-5 gap-6">
             {[
-              { num: 1, name: 'Check In', desc: 'Establish presence & connection', color: 'bg-blue-500' },
-              { num: 2, name: 'Starting Point', desc: 'Define current reality', color: 'bg-indigo-500' },
-              { num: 3, name: 'Connect', desc: 'Explore possibilities', color: 'bg-purple-500' },
-              { num: 4, name: 'Finish', desc: 'Set SMART goals', color: 'bg-green-500' },
-              { num: 5, name: 'Check Out', desc: 'Capture learnings', color: 'bg-emerald-500' },
+              { num: 1, name: 'Check In', desc: 'Establish presence & connection', color: 'from-blue-500 to-blue-600' },
+              { num: 2, name: 'Starting Point', desc: 'Define current reality', color: 'from-indigo-500 to-indigo-600' },
+              { num: 3, name: 'Connect', desc: 'Explore possibilities', color: 'from-purple-500 to-purple-600' },
+              { num: 4, name: 'Finish', desc: 'Set SMART goals', color: 'from-green-500 to-green-600' },
+              { num: 5, name: 'Check Out', desc: 'Capture learnings', color: 'from-emerald-500 to-emerald-600' },
             ].map((stage) => (
-              <div key={stage.num} className="text-center">
-                <div className={`w-12 h-12 ${stage.color} rounded-full flex items-center justify-center text-white font-bold text-lg mx-auto mb-2`}>
+              <div key={stage.num} className="text-center group cursor-default">
+                <div className={`w-14 h-14 bg-gradient-to-br ${stage.color} rounded-2xl flex items-center justify-center text-white font-bold text-xl mx-auto mb-3 shadow-lg group-hover:scale-110 transition-transform`}>
                   {stage.num}
                 </div>
-                <h3 className="font-semibold mb-1">{stage.name}</h3>
-                <p className="text-xs text-muted-foreground">{stage.desc}</p>
+                <h3 className="font-semibold mb-1.5 text-slate-800 dark:text-slate-200">{stage.name}</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{stage.desc}</p>
               </div>
             ))}
           </div>
