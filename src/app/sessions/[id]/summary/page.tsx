@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Download, CheckCircle, Target, ListChecks, TrendingUp, Users, Calendar, Printer, Clock, FileText } from 'lucide-react';
+import { ArrowLeft, Download, CheckCircle, Target, ListChecks, TrendingUp, Users, Calendar, Printer, Clock, FileText, Home } from 'lucide-react';
 import { getSession } from '@/lib/supabase/sessions';
 import toast from 'react-hot-toast';
 
@@ -182,19 +182,23 @@ export default function SessionSummaryPage() {
       <div className="bg-white border-b border-slate-200 shadow-sm no-print">
         <div className="max-w-[1400px] mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
-            <Button
-              onClick={() => router.push('/sessions')}
-              variant="ghost"
-              className="gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Sessions
-            </Button>
-            <div className="text-right">
-              <h1 className="text-2xl font-bold text-slate-900">Session Summary</h1>
-              <p className="text-sm text-slate-500">
-                {sessionData?.session_type === 'coach_led' ? 'Coach-Led Session' : 'Self-Coaching Session'}
-              </p>
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={() => router.push('/sessions')}
+                variant="ghost"
+                className="gap-2 text-lg font-semibold"
+              >
+                <ArrowLeft className="h-5 w-5" />
+                Back to Coaching History
+              </Button>
+              <Button
+                onClick={() => router.push('/')}
+                variant="outline"
+                className="gap-2"
+              >
+                <Home className="h-4 w-4" />
+                Home
+              </Button>
             </div>
           </div>
         </div>

@@ -21,6 +21,8 @@ CREATE TABLE coaching_sessions (
   session_type TEXT CHECK (session_type IN ('coach_led', 'self_coaching')) NOT NULL,
   current_stage INTEGER DEFAULT 1 CHECK (current_stage BETWEEN 1 AND 5),
   is_complete BOOLEAN DEFAULT FALSE,
+  summary TEXT,  -- AI-generated session summary
+  coaching_theme TEXT,  -- Extracted theme/heading from summary (e.g., "Professional Development Journey")
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -46,10 +48,10 @@ CREATE TABLE action_plans (
   goal_statement TEXT NOT NULL,
   smart_criteria JSONB NOT NULL DEFAULT '{}',
   priority INTEGER CHECK (priority BETWEEN 1 AND 5) DEFAULT 3,
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'blocked')),
-  timeline_start DATE,
-  timeline_end DATE,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
+  due_date DATE,
   notes TEXT,
+  coaching_theme TEXT,  -- Coaching theme from parent session (denormalized for performance)
   completed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

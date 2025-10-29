@@ -6,6 +6,7 @@ export interface SessionData {
   current_stage: number;
   is_complete: boolean;
   summary?: string;
+  coaching_theme?: string;  // Coaching theme heading from summary
   created_at?: string;
   updated_at?: string;
 }
@@ -289,12 +290,58 @@ export async function getActionPlans(sessionId: string) {
 }
 
 /**
+ * Extract coaching theme from summary text
+ */
+function extractCoachingTheme(summary: string): string {
+  // Try to extract the main focus from executive summary or goal
+  const goalMatch = summary.match(/to become.*?(?=\.|,|within)/i);
+  if (goalMatch) {
+    return goalMatch[0].replace(/^to become\s*/i, '').trim();
+  }
+  
+  // Try to extract from Goal Statement section
+  const goalSectionMatch = summary.match(/\*\*Goal Statement\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+  if (goalSectionMatch) {
+    const goalText = goalSectionMatch[1].trim();
+    // Extract first meaningful phrase (up to 100 chars)
+    const firstSentence = goalText.split('.')[0].trim();
+    if (firstSentence.length > 0 && firstSentence.length <= 150) {
+      return firstSentence;
+    }
+  }
+  
+  // Try to extract from Executive Summary
+  const execMatch = summary.match(/\*\*Executive Summary\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
+  if (execMatch) {
+    const execText = execMatch[1].trim();
+    // Extract key phrase mentioning goals or objectives
+    const aimMatch = execText.match(/(?:aims? to|goal is to|focused on|working towards)\s+([^.]+)/i);
+    if (aimMatch) {
+      return aimMatch[1].trim();
+    }
+    // Fallback: use first sentence
+    const firstSentence = execText.split('.')[0].trim();
+    if (firstSentence.length > 0 && firstSentence.length <= 150) {
+      return firstSentence;
+    }
+  }
+  
+  return 'Professional Development Journey';
+}
+
+/**
  * Save the AI-generated summary for a session
  */
 export async function saveSummary(sessionId: string, summary: string) {
+  // Extract coaching theme from summary
+  const coaching_theme = extractCoachingTheme(summary);
+  
   const { data, error } = await supabase
     .from('coaching_sessions')
-    .update({ summary })
+    .update({ 
+      summary,
+      coaching_theme 
+    })
     .eq('id', sessionId)
     .select()
     .single();

@@ -18,6 +18,7 @@ interface Session {
   created_at: string;
   updated_at: string;
   executive_summary?: string;
+  coaching_theme?: string;  // Coaching theme from session summary
   key_heading?: string;
 }
 
@@ -61,12 +62,11 @@ export default function SessionsPage() {
               if (summaryResponse.ok) {
                 const { summary } = await summaryResponse.json();
                 const execMatch = summary.match(/\*\*Executive Summary\*\*[:\s]*\n*([\s\S]*?)(?=\n\*\*|$)/i);
-                const goalMatch = summary.match(/to become.*?(?=\.|,|within)/i);
                 
                 return {
                   ...session,
                   executive_summary: execMatch ? execMatch[1].trim().substring(0, 200) + '...' : 'Summary not available',
-                  key_heading: goalMatch ? goalMatch[0].replace(/^to become\s*/i, '').trim() : 'Coaching Session'
+                  // coaching_theme should already be set from database
                 };
               }
             } catch (error) {
@@ -167,7 +167,7 @@ export default function SessionsPage() {
                   <thead className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-indigo-100">
                     <tr>
                       <th className="px-4 py-4 text-center text-sm font-semibold text-slate-700 w-16">#</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Coaching Content</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Coaching Theme</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Date</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Progress</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Executive Summary</th>
@@ -189,7 +189,7 @@ export default function SessionsPage() {
                           </div>
                         </td>
 
-                        {/* Coaching Content */}
+                        {/* Coaching Theme */}
                         <td className="px-6 py-4">
                           <div className="space-y-2">
                             <div className="flex items-center gap-2">
@@ -209,7 +209,7 @@ export default function SessionsPage() {
                               </Badge>
                             </div>
                             <h3 className="font-semibold text-slate-900 text-base">
-                              {session.key_heading || 'Coaching Session'}
+                              {session.coaching_theme || 'Coaching Session'}
                             </h3>
                           </div>
                         </td>

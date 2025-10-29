@@ -44,11 +44,6 @@ interface EditingState {
   };
 }
 
-interface SessionInfo {
-  theme: string;
-  sessionId: string;
-}
-
 export function ActionPlansTable({
   actionPlans,
   onView,
@@ -60,7 +55,6 @@ export function ActionPlansTable({
   const [editingRows, setEditingRows] = useState<Set<string>>(new Set());
   const [editingData, setEditingData] = useState<EditingState>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [sessionInfo, setSessionInfo] = useState<Record<string, SessionInfo>>({});
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,77 +70,6 @@ export function ActionPlansTable({
     dueDate: '',
   });
 
-  // Fetch session themes from session summaries
-  useEffect(() => {
-    const fetchSessionInfo = async () => {
-      const uniqueSessionIds = Array.from(new Set(actionPlans.map(p => p.session_id)));
-      const info: Record<string, SessionInfo> = {};
-      
-      for (const sessionId of uniqueSessionIds) {
-        try {
-          // Fetch session data which includes the cached summary
-          const response = await fetch(`/api/sessions/${sessionId}`);
-          if (response.ok) {
-            const session = await response.json();
-            const summary = session?.summary || '';
-            
-            console.log('Fetching theme for session:', sessionId);
-            console.log('Summary preview:', summary.substring(0, 200));
-            
-            let theme = 'Professional Development';
-            
-            if (summary) {
-              // Extract theme from the Executive Summary section
-              // Pattern: "aims to become a 'vibe coding expert'"
-              // Also try: "to become a 'vibe coding expert'"
-              const patterns = [
-                /aims to become a? ['"]([^'"]+)['"]/i,
-                /to become a? ['"]([^'"]+)['"]/i,
-                /become a? ['"]([^'"]+)['"]/i,
-                /goal.*?['"]([^'"]+)['"]/i,
-              ];
-              
-              for (const pattern of patterns) {
-                const match = summary.match(pattern);
-                if (match && match[1]) {
-                  theme = match[1].trim();
-                  console.log('Extracted theme:', theme);
-                  break;
-                }
-              }
-              
-              if (theme === 'Professional Development') {
-                console.log('No theme match found in summary, using default');
-              }
-            }
-            
-            info[sessionId] = {
-              theme,
-              sessionId,
-            };
-          } else {
-            console.error('Failed to fetch session:', response.status);
-            info[sessionId] = {
-              theme: 'Coaching Session',
-              sessionId,
-            };
-          }
-        } catch (error) {
-          console.error('Error fetching session info:', error);
-          info[sessionId] = {
-            theme: 'Coaching Session',
-            sessionId,
-          };
-        }
-      }
-      
-      setSessionInfo(info);
-    };
-    
-    if (actionPlans.length > 0) {
-      fetchSessionInfo();
-    }
-  }, [actionPlans]);
 
   const startEditing = (plan: ActionPlanExtended) => {
     setEditingRows(new Set([...editingRows, plan.id]));
@@ -228,7 +151,7 @@ export function ActionPlansTable({
   // Apply filters to action plans
   const filteredPlans = useMemo(() => {
     return actionPlans.filter((plan) => {
-      const theme = sessionInfo[plan.session_id]?.theme || '';
+      const theme = plan.coaching_theme || 'Professional Development';
       const action = plan.title || '';
       const content = plan.description || '';
       const status = plan.status || '';
@@ -244,7 +167,7 @@ export function ActionPlansTable({
         dueDate.toLowerCase().includes(filters.dueDate.toLowerCase())
       );
     });
-  }, [actionPlans, sessionInfo, filters]);
+  }, [actionPlans, filters]);
 
   const updateFilter = (column: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [column]: value }));
@@ -436,7 +359,7 @@ export function ActionPlansTable({
                     <td className="px-4 py-4 align-top min-w-[180px]">
                       <div>
                         <div className="font-medium text-slate-900">
-                          {sessionInfo[plan.session_id]?.theme || 'Coaching Session'}
+                          {plan.coaching_theme || 'Professional Development'}
                         </div>
                         <div className="text-xs text-slate-400 mt-1">
                           #{plan.session_id.slice(0, 8)}

@@ -8,12 +8,11 @@ export interface ActionPlanExtended {
   goal_statement?: string;
   smart_criteria?: any;
   priority: 'low' | 'medium' | 'high';
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
-  timeline_start?: string;
-  timeline_end?: string;
+  status: 'pending' | 'in_progress' | 'completed';
   due_date?: string;
   completed_at?: string;
   notes?: string;
+  coaching_theme?: string;  // Coaching theme from session summary
   created_at: string;
   updated_at: string;
 }

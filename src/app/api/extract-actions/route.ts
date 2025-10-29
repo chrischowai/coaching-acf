@@ -131,7 +131,7 @@ Example output:
     console.log('Verifying session exists before creating action plans:', sessionId);
     const { data: sessionCheck, error: sessionCheckError } = await supabase
       .from('coaching_sessions')
-      .select('id, is_complete')
+      .select('id, is_complete, coaching_theme')
       .eq('id', sessionId)
       .maybeSingle();
     
@@ -146,6 +146,9 @@ Example output:
     }
     
     console.log('Session verified:', sessionCheck);
+    
+    // Get coaching theme from session
+    const coachingTheme = sessionCheck.coaching_theme || 'Professional Development Journey';
     
     // First get the goal statement for the action plans table
     const goalMatch = summary.match(/\*\*Goal Statement\*\*[:\s]*([^*]+)/i);
@@ -163,8 +166,7 @@ Example output:
           priority: action.priority === 'high' ? 5 : action.priority === 'medium' ? 3 : 1,
           status: 'pending',
           due_date: action.due_date,
-          timeline_start: new Date().toISOString().split('T')[0],
-          timeline_end: action.due_date,
+          coaching_theme: coachingTheme,  // Add coaching theme from session
         }))
       )
       .select();

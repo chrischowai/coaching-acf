@@ -221,22 +221,23 @@ export default function ActionPlanDetailPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
       <div className="border-b border-indigo-200 bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-10">
-        <div className="max-w-[1400px] mx-auto px-6 py-4">
+        <div className="max-w-[1400px] mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
             <Button
-              variant="ghost"
               onClick={() => router.push('/action-plans')}
-              className="hover:bg-indigo-50"
+              size="lg"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all"
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 h-5 w-5" />
               Back to Action Plans
             </Button>
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-bold text-slate-900">Action Plan Details</h1>
-              <Badge className="bg-indigo-600">
+            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-4">
+              <h1 className="text-2xl font-bold text-slate-900">Details of Action Plan</h1>
+              <Badge className="bg-indigo-600 text-sm px-3 py-1">
                 {sessionInfo.session_type === 'coach_led' ? 'Coach-Led Session' : 'Self-Coaching Session'}
               </Badge>
             </div>
+            <div className="w-[180px]"></div>
           </div>
         </div>
       </div>

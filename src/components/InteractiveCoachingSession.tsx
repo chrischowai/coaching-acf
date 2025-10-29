@@ -279,23 +279,41 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
 
   const generateSummary = async (allData: StageData[]) => {
     setIsLoading(true);
+    console.log('🔵 Starting summary generation for session:', sessionId);
+    
     try {
-      // Generate summary
+      // Step 1: Generate and save summary (includes coaching_theme extraction)
+      console.log('📝 Generating summary via API...');
       const response = await fetch('/api/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          sessionId,  // CRITICAL: Include sessionId to save summary and coaching_theme
           allStageConversations: allData,
           sessionType,
+          forceRegenerate: false,  // Use cache if available
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to generate summary');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Summary API failed:', errorText);
+        throw new Error('Failed to generate summary');
+      }
 
       const data = await response.json();
+      console.log('✅ Summary generated successfully');
+      console.log('   - Cached:', data.cached);
+      console.log('   - Summary length:', data.summary?.length || 0);
+      
       setSummary(data.summary);
       
-      // Extract and save action plans (with better error handling)
+      // Step 2: Wait a moment for database to update
+      console.log('⏳ Waiting for database to update...');
+      await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+      
+      // Step 3: Extract and save action plans
+      console.log('🎯 Creating action plans from summary...');
       try {
         const actionsResponse = await fetch('/api/extract-actions', {
           method: 'POST',
@@ -308,23 +326,29 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
 
         if (actionsResponse.ok) {
           const actionsData = await actionsResponse.json();
-          console.log(`Created ${actionsData.count} action plans`);
-          toast.success(`Session completed! ${actionsData.count} action plans created.`);
+          console.log(`✅ Created ${actionsData.count} action plans successfully`);
+          toast.success(`🎉 Session completed! ${actionsData.count} action plans created.`, {
+            duration: 5000,
+          });
         } else {
           const errorData = await actionsResponse.json();
-          console.warn('Failed to extract action plans:', errorData);
-          toast.success('Session completed! Review your summary below.');
+          console.error('❌ Failed to create action plans:', errorData);
+          toast.warning('Session completed! Please check Action Plans page.', {
+            duration: 5000,
+          });
         }
       } catch (actionError) {
-        console.warn('Action extraction failed (non-critical):', actionError);
-        // Don't show error to user, just log it
-        toast.success('Session completed! Review your summary below.');
+        console.error('❌ Action extraction error:', actionError);
+        toast.warning('Session completed! Action plans may not have been created.', {
+          duration: 5000,
+        });
       }
       
+      console.log('✅ All summary generation steps completed');
       setShowSummary(true);
     } catch (error) {
-      toast.error('Failed to generate summary');
-      console.error(error);
+      console.error('❌ Summary generation failed:', error);
+      toast.error('Failed to generate summary. Please try again.');
     } finally {
       setIsLoading(false);
     }
