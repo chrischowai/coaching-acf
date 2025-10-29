@@ -114,6 +114,13 @@ export default function ActionPlanDetailPage() {
       const allSessionPlans = await getActionPlansBySession(sessionId);
       setActionPlans(allSessionPlans);
 
+      // Set plan name from coaching_theme (use first action plan's theme)
+      if (actionPlan.coaching_theme) {
+        setPlanName(actionPlan.coaching_theme);
+      } else {
+        setPlanName('Action Plan');
+      }
+
       // Fetch session info
       try {
         const { session, stages } = await getSession(sessionId);
@@ -140,11 +147,17 @@ export default function ActionPlanDetailPage() {
           const { summary: summaryText } = await summaryResponse.json();
           const parsed = parseSummary(summaryText);
           setSessionSummary(parsed);
-          setPlanName(extractPlanName(parsed));
+          // Only use extracted name as fallback if no coaching_theme exists
+          if (!actionPlan.coaching_theme) {
+            setPlanName(extractPlanName(parsed));
+          }
         }
       } catch (error) {
         console.warn('Could not load session summary:', error);
-        setPlanName('Action Plan');
+        // Keep the coaching_theme if it was already set
+        if (!actionPlan.coaching_theme) {
+          setPlanName('Action Plan');
+        }
       }
     } catch (error) {
       console.error('Failed to load action plan:', error);
@@ -232,7 +245,9 @@ export default function ActionPlanDetailPage() {
               Back to Action Plans
             </Button>
             <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-4">
-              <h1 className="text-2xl font-bold text-slate-900">Details of Action Plan</h1>
+              <h1 className="text-2xl font-bold text-slate-900">
+                Details of Action Plan
+              </h1>
               <Badge className="bg-indigo-600 text-sm px-3 py-1">
                 {sessionInfo.session_type === 'coach_led' ? 'Coach-Led Session' : 'Self-Coaching Session'}
               </Badge>
@@ -273,7 +288,7 @@ export default function ActionPlanDetailPage() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold text-slate-900">{planName}</h1>
+                    <h1 className="text-2xl font-bold text-slate-900 capitalize">{planName}</h1>
                     <Button
                       variant="ghost"
                       size="sm"

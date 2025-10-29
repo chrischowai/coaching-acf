@@ -249,14 +249,27 @@ export function ActionPlanTable({ sessionId }: ActionPlanTableProps) {
                     </div>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleExpanded(item.id)}
-                  className="flex-shrink-0"
-                >
-                  {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                </Button>
+                <div className="flex items-center gap-3">
+                  {hasChanges && (
+                    <Button
+                      onClick={() => handleSave(item.id)}
+                      disabled={isSaving}
+                      size="sm"
+                      className="bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Changes
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleExpanded(item.id)}
+                    className="flex-shrink-0"
+                  >
+                    {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </Button>
+                </div>
               </div>
             </CardHeader>
 
@@ -276,7 +289,7 @@ export function ActionPlanTable({ sessionId }: ActionPlanTableProps) {
                   />
                 </div>
 
-                <div className="flex justify-between items-center pt-2">
+                <div className="flex justify-start items-center pt-2">
                   <Button
                     variant="destructive"
                     size="sm"
@@ -287,17 +300,6 @@ export function ActionPlanTable({ sessionId }: ActionPlanTableProps) {
                     <Trash2 className="mr-2 h-4 w-4" />
                     {deletingItemId === item.id ? 'Deleting...' : 'Delete Action'}
                   </Button>
-                  
-                  {hasChanges && (
-                    <Button
-                      onClick={() => handleSave(item.id)}
-                      disabled={isSaving}
-                      className="bg-orange-600 hover:bg-orange-700"
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      Save Changes
-                    </Button>
-                  )}
                 </div>
               </CardContent>
             )}

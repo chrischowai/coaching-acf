@@ -24,6 +24,11 @@ interface StageData {
 
 interface InteractiveCoachingSessionProps {
   sessionType: 'coach_led' | 'self_coaching';
+  // Optional props for resuming sessions
+  existingSessionId?: string;
+  resumeFromStage?: number;
+  existingMessages?: Message[];
+  existingQuestionCount?: number;
 }
 
 const STAGE_NAMES = [
@@ -34,18 +39,25 @@ const STAGE_NAMES = [
   'Nourish Accountability',
 ];
 
-export default function InteractiveCoachingSession({ sessionType }: InteractiveCoachingSessionProps) {
+export default function InteractiveCoachingSession({ 
+  sessionType,
+  existingSessionId,
+  resumeFromStage,
+  existingMessages,
+  existingQuestionCount,
+}: InteractiveCoachingSessionProps) {
   const router = useRouter();
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [currentStage, setCurrentStage] = useState(1);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(existingSessionId || null);
+  const [currentStage, setCurrentStage] = useState(resumeFromStage || 1);
+  const [messages, setMessages] = useState<Message[]>(existingMessages || []);
   const [allStageData, setAllStageData] = useState<StageData[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [questionCount, setQuestionCount] = useState(0);
+  const [questionCount, setQuestionCount] = useState(existingQuestionCount || 0);
   const [showSummary, setShowSummary] = useState(false);
   const [summary, setSummary] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isResuming, setIsResuming] = useState(!!existingSessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const progress = (currentStage / 5) * 100;
@@ -53,6 +65,16 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
   // Initialize session
   useEffect(() => {
     const initSession = async () => {
+      // If resuming, don't create new session
+      if (isResuming) {
+        console.log('Resuming session:', sessionId, 'at stage', currentStage);
+        toast.success(`Resumed from Stage ${currentStage}: ${STAGE_NAMES[currentStage - 1]}`, {
+          duration: 4000,
+        });
+        setIsResuming(false);
+        return;
+      }
+
       try {
         const session = await createSession(sessionType);
         console.log('Session created:', session.id);
@@ -68,6 +90,8 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
     };
 
     if (!sessionId && messages.length === 0) {
+      initSession();
+    } else if (isResuming) {
       initSession();
     }
   }, []);

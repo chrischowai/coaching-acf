@@ -156,6 +156,16 @@ export default function SessionViewPage() {
                   </div>
                 </>
               )}
+              {/* Continue Session Button */}
+              {!session.is_complete && (
+                <Button
+                  onClick={() => router.push(`/sessions/${sessionId}/continue`)}
+                  className="ml-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4 rotate-180" />
+                  Continue Session
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -167,10 +177,17 @@ export default function SessionViewPage() {
           <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
             <CardTitle className="flex items-center justify-between">
               <span>Session Overview</span>
-              {session.is_complete && (
+              {session.is_complete ? (
                 <span className="flex items-center gap-2 text-sm font-normal text-green-600">
                   <CheckCircle className="h-5 w-5" />
                   Completed
+                </span>
+              ) : (
+                <span className="flex items-center gap-2 text-sm font-normal text-amber-600">
+                  <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center animate-pulse">
+                    <span className="text-white text-xs font-bold">!</span>
+                  </div>
+                  In Progress - Stage {session.current_stage}
                 </span>
               )}
             </CardTitle>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { getSessions, deleteSession, getSession } from '@/lib/supabase/sessions';
-import { ArrowLeft, Calendar, CheckCircle, Clock, Trash2, Eye, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ArrowLeft, Calendar, CheckCircle, Clock, Trash2, Eye, FileText, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Play } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -299,6 +299,16 @@ export default function SessionsPage() {
                         {/* Actions */}
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
+                            {!session.is_complete && (
+                              <Button
+                                onClick={() => router.push(`/sessions/${session.id}/continue`)}
+                                size="sm"
+                                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+                              >
+                                <Play className="h-3 w-3 mr-1" />
+                                Continue
+                              </Button>
+                            )}
                             <Button
                               onClick={() => router.push(`/sessions/${session.id}`)}
                               size="sm"
@@ -308,16 +318,17 @@ export default function SessionsPage() {
                               <Eye className="h-3 w-3 mr-1" />
                               View
                             </Button>
-                            <Button
-                              onClick={() => router.push(`/sessions/${session.id}/summary`)}
-                              size="sm"
-                              variant="outline"
-                              className="hover:bg-purple-50"
-                              disabled={!session.is_complete}
-                            >
-                              <FileText className="h-3 w-3 mr-1" />
-                              Summary
-                            </Button>
+                            {session.is_complete && (
+                              <Button
+                                onClick={() => router.push(`/sessions/${session.id}/summary`)}
+                                size="sm"
+                                variant="outline"
+                                className="hover:bg-purple-50"
+                              >
+                                <FileText className="h-3 w-3 mr-1" />
+                                Summary
+                              </Button>
+                            )}
                             <Button
                               onClick={() => handleDelete(session.id)}
                               variant="outline"
