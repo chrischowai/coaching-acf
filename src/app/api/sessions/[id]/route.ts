@@ -10,7 +10,7 @@ export async function GET(
     const supabase = await createClient();
 
     const { data: session, error } = await supabase
-      .from('sessions')
+      .from('coaching_sessions')
       .select('*')
       .eq('id', id)
       .single();

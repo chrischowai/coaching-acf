@@ -306,20 +306,11 @@ export default function ActionPlanDetailPage() {
               Action Items
             </h2>
             <p className="text-sm text-slate-600">
-              From your coaching session summary
+              From your coaching session
             </p>
           </div>
           
-          {sessionSummary && sessionSummary.actions ? (
-            <ActionPlanTable actionsText={sessionSummary.actions} sessionId={sessionInfo.id} />
-          ) : (
-            <Card>
-              <CardContent className="py-10 text-center text-slate-500">
-                <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                <p>No action items available. Complete a coaching session to generate action items.</p>
-              </CardContent>
-            </Card>
-          )}
+          <ActionPlanTable sessionId={sessionInfo.id} />
         </div>
 
         {/* Navigation Buttons */}

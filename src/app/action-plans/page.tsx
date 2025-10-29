@@ -4,15 +4,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select } from '@/components/ui/select';
 import { StatCard } from '@/components/action-plans/StatCard';
-import { ActionPlanCard } from '@/components/action-plans/ActionPlanCard';
+import { ActionPlansTable } from '@/components/action-plans/ActionPlansTable';
 import {
   getAllActionPlans,
   getActionPlanStats,
   completeActionPlan,
   startActionPlan,
+  deleteActionPlan,
+  updateActionPlan,
   ActionPlanExtended,
 } from '@/lib/supabase/action-plans';
 import {
@@ -27,9 +27,6 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-type StatusFilter = 'all' | 'pending' | 'in_progress' | 'completed';
-type SortOption = 'due_date' | 'priority' | 'created_at';
-
 export default function ActionPlansPage() {
   const router = useRouter();
   const [actionPlans, setActionPlans] = useState<ActionPlanExtended[]>([]);
@@ -42,16 +39,14 @@ export default function ActionPlansPage() {
     completionRate: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('due_date');
 
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
-    applyFiltersAndSort();
-  }, [actionPlans, statusFilter, sortBy]);
+    setFilteredPlans(actionPlans);
+  }, [actionPlans]);
 
   const loadData = async () => {
     try {
@@ -70,33 +65,6 @@ export default function ActionPlansPage() {
     }
   };
 
-  const applyFiltersAndSort = () => {
-    let filtered = [...actionPlans];
-
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter((plan) => plan.status === statusFilter);
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'due_date':
-          if (!a.due_date) return 1;
-          if (!b.due_date) return -1;
-          return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-        case 'priority':
-          const priorityMap = { high: 3, medium: 2, low: 1 };
-          return priorityMap[b.priority] - priorityMap[a.priority];
-        case 'created_at':
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        default:
-          return 0;
-      }
-    });
-
-    setFilteredPlans(filtered);
-  };
 
   const handleComplete = async (id: string) => {
     try {
@@ -125,6 +93,28 @@ export default function ActionPlansPage() {
     router.push(`/action-plans/${id}`);
   };
 
+  const handleUpdate = async (id: string, updates: Partial<ActionPlanExtended>) => {
+    try {
+      await updateActionPlan(id, updates);
+      toast.success('Action plan updated!');
+      await loadData();
+    } catch (error) {
+      console.error('Failed to update action plan:', error);
+      toast.error('Failed to update action plan');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteActionPlan(id);
+      toast.success('Action plan deleted!');
+      await loadData();
+    } catch (error) {
+      console.error('Failed to delete action plan:', error);
+      toast.error('Failed to delete action plan');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
@@ -132,12 +122,13 @@ export default function ActionPlansPage() {
         <div className="max-w-[1400px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Button
-              variant="ghost"
+              variant="default"
+              size="lg"
               onClick={() => router.push('/')}
-              className="hover:bg-indigo-50"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all"
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
+              <ArrowLeft className="mr-2 h-5 w-5" />
+              <span className="font-semibold">Back to Home</span>
             </Button>
             <div className="text-right">
               <h1 className="text-2xl font-bold text-slate-900">Action Plans</h1>
@@ -190,37 +181,6 @@ export default function ActionPlansPage() {
           </div>
         )}
 
-        {/* Filters and Sort Controls */}
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              {/* Status Filter Tabs */}
-              <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-                <TabsList>
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="pending">Pending</TabsTrigger>
-                  <TabsTrigger value="in_progress">In Progress</TabsTrigger>
-                  <TabsTrigger value="completed">Completed</TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-              {/* Sort Dropdown */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-600">Sort by:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="text-sm border border-slate-300 rounded px-3 py-1.5 bg-white hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="due_date">Due Date</option>
-                  <option value="priority">Priority</option>
-                  <option value="created_at">Created Date</option>
-                </select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Loading State */}
         {isLoading && (
           <div className="flex items-center justify-center py-20">
@@ -237,43 +197,32 @@ export default function ActionPlansPage() {
             <CardContent className="py-20 text-center">
               <Target className="h-16 w-16 text-slate-400 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-slate-700 mb-2">
-                {statusFilter === 'all' 
-                  ? 'No action plans yet'
-                  : `No ${statusFilter.replace('_', ' ')} action plans`
-                }
+                No action plans yet
               </h3>
               <p className="text-slate-500 mb-6">
-                {statusFilter === 'all'
-                  ? 'Complete a coaching session to generate action plans'
-                  : 'Try changing your filter to see other action plans'
-                }
+                Complete a coaching session to generate action plans
               </p>
-              {statusFilter === 'all' && (
-                <Button
-                  onClick={() => router.push('/')}
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Start New Coaching Session
-                </Button>
-              )}
+              <Button
+                onClick={() => router.push('/')}
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Start New Coaching Session
+              </Button>
             </CardContent>
           </Card>
         )}
 
-        {/* Action Plans Grid */}
+        {/* Action Plans Table */}
         {!isLoading && filteredPlans.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPlans.map((plan) => (
-              <ActionPlanCard
-                key={plan.id}
-                actionPlan={plan}
-                onView={handleView}
-                onComplete={handleComplete}
-                onStart={handleStart}
-              />
-            ))}
-          </div>
+          <ActionPlansTable
+            actionPlans={filteredPlans}
+            onView={handleView}
+            onComplete={handleComplete}
+            onStart={handleStart}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+          />
         )}
       </div>
     </div>

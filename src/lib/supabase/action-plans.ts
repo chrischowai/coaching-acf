@@ -5,14 +5,15 @@ export interface ActionPlanExtended {
   session_id: string;
   title: string;
   description?: string;
-  due_date?: string;
+  goal_statement?: string;
+  smart_criteria?: any;
   priority: 'low' | 'medium' | 'high';
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+  timeline_start?: string;
+  timeline_end?: string;
+  due_date?: string;
   completed_at?: string;
   notes?: string;
-  reminder_frequency?: 'none' | 'hourly' | 'daily' | 'weekly' | 'monthly';
-  last_reminder_sent?: string;
-  reminder_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }

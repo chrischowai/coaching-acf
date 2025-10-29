@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, FileText, Clock, Download, CheckCircle, Target, ListChecks, TrendingUp, Users, Calendar, Printer } from 'lucide-react';
+import { ArrowLeft, Download, CheckCircle, Target, ListChecks, TrendingUp, Users, Calendar, Printer, Clock, FileText } from 'lucide-react';
 import { getSession } from '@/lib/supabase/sessions';
 import toast from 'react-hot-toast';
 
@@ -32,9 +32,7 @@ export default function SessionSummaryPage() {
   const [summary, setSummary] = useState<string>('');
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isCached, setIsCached] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,13 +41,9 @@ export default function SessionSummaryPage() {
     }
   }, [sessionId]);
 
-  const fetchSummary = async (forceRegenerate = false) => {
+  const fetchSummary = async () => {
     try {
-      if (forceRegenerate) {
-        setIsRegenerating(true);
-      } else {
-        setIsLoading(true);
-      }
+      setIsLoading(true);
       setError(null);
 
       // Fetch session data and stage responses
@@ -62,7 +56,7 @@ export default function SessionSummaryPage() {
         messages: stage.responses?.messages || []
       }));
 
-      // Generate or fetch cached summary
+      // Fetch cached summary (no regeneration)
       const summaryResponse = await fetch('/api/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,28 +64,22 @@ export default function SessionSummaryPage() {
           sessionId,
           allStageConversations,
           sessionType: session.session_type,
-          forceRegenerate
+          forceRegenerate: false
         })
       });
 
       if (!summaryResponse.ok) {
-        throw new Error('Failed to generate summary');
+        throw new Error('Failed to load summary');
       }
 
-      const { summary: summaryText, cached } = await summaryResponse.json();
+      const { summary: summaryText } = await summaryResponse.json();
       setSummary(summaryText);
-      setIsCached(cached);
-      
-      if (forceRegenerate) {
-        toast.success('Summary regenerated successfully!');
-      }
     } catch (err) {
       console.error('Error fetching summary:', err);
       setError(err instanceof Error ? err.message : 'Failed to load summary');
-      toast.error('Failed to generate summary');
+      toast.error('Failed to load summary');
     } finally {
       setIsLoading(false);
-      setIsRegenerating(false);
     }
   };
 
@@ -228,7 +216,7 @@ export default function SessionSummaryPage() {
               <h3 className="text-xl font-semibold text-red-700 mb-2">Error</h3>
               <p className="text-red-600">{error}</p>
               <Button
-                onClick={fetchSummary}
+                onClick={() => fetchSummary()}
                 className="mt-4"
                 variant="outline"
               >
@@ -240,22 +228,6 @@ export default function SessionSummaryPage() {
           <>
             {/* Download/Print Button - Fixed Position */}
             <div className="flex justify-end gap-3 mb-6 no-print">
-              {isCached && (
-                <Button
-                  onClick={() => fetchSummary(true)}
-                  size="lg"
-                  variant="outline"
-                  className="gap-2"
-                  disabled={isRegenerating}
-                >
-                  {isRegenerating ? (
-                    <Clock className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileText className="h-4 w-4" />
-                  )}
-                  {isRegenerating ? 'Regenerating...' : 'Regenerate Summary'}
-                </Button>
-              )}
               <Button
                 onClick={() => window.print()}
                 size="lg"
@@ -310,7 +282,7 @@ export default function SessionSummaryPage() {
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="text-slate-700 leading-relaxed text-base space-y-3">
-                      {parseSummary(summary).executiveSummary.split(/\. (?=[A-Z])/).map((sentence, idx) => {
+                      {parseSummary(summary).executiveSummary.split(/\. (?=[A-Z])/).map((sentence: string, idx: number) => {
                         const trimmed = sentence.trim();
                         if (!trimmed) return null;
                         const withPeriod = trimmed.endsWith('.') ? trimmed : trimmed + '.';
@@ -318,7 +290,7 @@ export default function SessionSummaryPage() {
                         const parts = withPeriod.split(/"([^"]+)"/);
                         return (
                           <p key={idx} className="text-slate-700">
-                            {parts.map((part, i) => 
+                            {parts.map((part: string, i: number) => 
                               i % 2 === 1 ? (
                                 <span key={i} className="font-semibold text-blue-700">"{part}"</span>
                               ) : (
@@ -347,7 +319,7 @@ export default function SessionSummaryPage() {
                   </CardHeader>
                   <CardContent className="pt-6">
                     <div className="space-y-4">
-                      {parseSummary(summary).keyInsights.split(/\*\*([^*]+)\*\*/g).map((part, i) => {
+                      {parseSummary(summary).keyInsights.split(/\*\*([^*]+)\*\*/g).map((part: string, i: number) => {
                         if (i % 2 === 1) {
                           // This is a heading
                           return (
@@ -359,15 +331,15 @@ export default function SessionSummaryPage() {
                           // This is content with bullet points
                           const lines = part.trim()
                             .split('\n')
-                            .filter(line => line.trim())
-                            .map(line => line.replace(/^[*•]\s*/, '').trim())
+                            .filter((line: string) => line.trim())
+                            .map((line: string) => line.replace(/^[*•]\s*/, '').trim())
                             .filter(Boolean);
                           
                           if (lines.length === 0) return null;
                           
                           return (
                             <ul key={i} className="space-y-2">
-                              {lines.map((line, idx) => (
+                              {lines.map((line: string, idx: number) => (
                                 <li key={idx} className="flex items-start gap-2 text-slate-700 text-sm">
                                   <span className="text-purple-600 font-bold mt-0.5 flex-shrink-0">•</span>
                                   <span className="flex-1">{line}</span>
@@ -425,8 +397,8 @@ export default function SessionSummaryPage() {
                       dangerouslySetInnerHTML={{ 
                         __html: parseSummary(summary).actions
                           .split(/(?=\d+\.)/)
-                          .filter(item => item.trim())
-                          .map((item) => {
+                          .filter((item: string) => item.trim())
+                          .map((item: string) => {
                             const match = item.match(/(\d+)\.\s*\*\*([^*]+)\*\*(.+)/s);
                             if (match) {
                               const [, num, title, details] = match;
@@ -474,8 +446,8 @@ export default function SessionSummaryPage() {
                         dangerouslySetInnerHTML={{ 
                           __html: parseSummary(summary).metrics
                             .split('\n')
-                            .filter(line => line.trim())
-                            .map(line => {
+                            .filter((line: string) => line.trim())
+                            .map((line: string) => {
                               const cleaned = line.replace(/^[*•]\s*/, '').trim();
                               if (cleaned) {
                                 return `<div class="flex items-start gap-2 p-2 rounded hover:bg-cyan-50 transition-colors"><span class="text-cyan-600 font-bold text-lg mt-0.5">✓</span><span class="text-slate-700 text-sm flex-1">${cleaned}</span></div>`;
@@ -508,8 +480,8 @@ export default function SessionSummaryPage() {
                         dangerouslySetInnerHTML={{ 
                           __html: parseSummary(summary).support
                             .split('\n')
-                            .filter(line => line.trim())
-                            .map(line => {
+                            .filter((line: string) => line.trim())
+                            .map((line: string) => {
                               const cleaned = line.replace(/^[*•]\s*/, '').trim();
                               if (cleaned) {
                                 return `<div class="flex items-start gap-2 p-2 rounded hover:bg-rose-50 transition-colors"><span class="text-rose-600 text-lg mt-0.5">👥</span><span class="text-slate-700 text-sm flex-1">${cleaned}</span></div>`;

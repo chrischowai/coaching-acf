@@ -461,7 +461,7 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
               </CardHeader>
               <CardContent className="pt-6">
                 <div className="text-slate-700 leading-relaxed text-base space-y-3">
-                  {summaryData.executiveSummary.split(/\. (?=[A-Z])/).map((sentence, idx) => {
+                  {summaryData.executiveSummary.split(/\. (?=[A-Z])/).map((sentence: string, idx: number) => {
                     const trimmed = sentence.trim();
                     if (!trimmed) return null;
                     const withPeriod = trimmed.endsWith('.') ? trimmed : trimmed + '.';
@@ -469,7 +469,7 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
                     const parts = withPeriod.split(/"([^"]+)"/);
                     return (
                       <p key={idx} className="text-slate-700">
-                        {parts.map((part, i) => 
+                        {parts.map((part: string, i: number) => 
                           i % 2 === 1 ? (
                             <span key={i} className="font-semibold text-blue-700">"{part}"</span>
                           ) : (
@@ -498,7 +498,7 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
               </CardHeader>
               <CardContent className="pt-6">
                 <div className="space-y-4">
-                  {summaryData.keyInsights.split(/\*\*([^*]+)\*\*/g).map((part, i) => {
+                  {summaryData.keyInsights.split(/\*\*([^*]+)\*\*/g).map((part: string, i: number) => {
                     if (i % 2 === 1) {
                       // This is a heading
                       return (
@@ -510,15 +510,15 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
                       // This is content with bullet points
                       const lines = part.trim()
                         .split('\n')
-                        .filter(line => line.trim())
-                        .map(line => line.replace(/^[*•]\s*/, '').trim())
+                        .filter((line: string) => line.trim())
+                        .map((line: string) => line.replace(/^[*•]\s*/, '').trim())
                         .filter(Boolean);
                       
                       if (lines.length === 0) return null;
                       
                       return (
                         <ul key={i} className="space-y-2">
-                          {lines.map((line, idx) => (
+                          {lines.map((line: string, idx: number) => (
                             <li key={idx} className="flex items-start gap-2 text-slate-700 text-sm">
                               <span className="text-purple-600 font-bold mt-0.5 flex-shrink-0">•</span>
                               <span className="flex-1">{line}</span>
@@ -576,8 +576,8 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
                   dangerouslySetInnerHTML={{ 
                     __html: summaryData.actions
                       .split(/(?=\d+\.)/)
-                      .filter(item => item.trim())
-                      .map((item) => {
+                      .filter((item: string) => item.trim())
+                      .map((item: string) => {
                         const match = item.match(/(\d+)\.\s*\*\*([^*]+)\*\*(.+)/s);
                         if (match) {
                           const [, num, title, details] = match;
@@ -625,8 +625,8 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
                     dangerouslySetInnerHTML={{ 
                       __html: summaryData.metrics
                         .split('\n')
-                        .filter(line => line.trim())
-                        .map(line => {
+                        .filter((line: string) => line.trim())
+                        .map((line: string) => {
                           const cleaned = line.replace(/^[*•]\s*/, '').trim();
                           if (cleaned) {
                             return `<div class="flex items-start gap-2 p-2 rounded hover:bg-cyan-50 transition-colors"><span class="text-cyan-600 font-bold text-lg mt-0.5">✓</span><span class="text-slate-700 text-sm flex-1">${cleaned}</span></div>`;
@@ -659,8 +659,8 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
                     dangerouslySetInnerHTML={{ 
                       __html: summaryData.support
                         .split('\n')
-                        .filter(line => line.trim())
-                        .map(line => {
+                        .filter((line: string) => line.trim())
+                        .map((line: string) => {
                           const cleaned = line.replace(/^[*•]\s*/, '').trim();
                           if (cleaned) {
                             return `<div class="flex items-start gap-2 p-2 rounded hover:bg-rose-50 transition-colors"><span class="text-rose-600 text-lg mt-0.5">👥</span><span class="text-slate-700 text-sm flex-1">${cleaned}</span></div>`;
@@ -952,3 +952,7 @@ export default function InteractiveCoachingSession({ sessionType }: InteractiveC
     </div>
   );
 }
+
+
+
+
